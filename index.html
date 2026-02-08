@@ -1,4 +1,6 @@
-<!-- DeepSeek JS replacement. Photo upload and delete now working. -->
+
+<!-- DeepSeek JS replacement. Loaded images are stuck on "processing". -->
+
 
 <!DOCTYPE html>
 <html lang="en">
@@ -2166,7 +2168,11 @@ const EcoLens = {
         this.renderLogbook();
         this.updateDateInputs();
         this.setCurrentDateTime();
-        console.log('EcoLens initialized with', this.observations.length, 'observations');
+        
+        // Add this line to migrate existing data
+        if (this.observations.length > 0) {
+            setTimeout(() => this.migrateExistingObservations(), 2000);
+        }
         
         // FAB button setup
         const fabBtn = document.getElementById('fab-add');
@@ -2471,25 +2477,54 @@ const EcoLens = {
         };
     },
 
-    // Save observation to localStorage
-    saveObservation(observation) {
+    // Save observation to localStorage - REPLACE WITH THIS
+    async saveObservation(observation) {
         try {
             if (!this.validateObservation(observation)) {
                 this.showStatus('Observation validation failed', 'error');
                 return false;
             }
 
-            this.observations.unshift(observation);
+            // Process photo data for storage
+            let processedObservation = { ...observation };
+            
+            if (observation.photo) {
+                // Create storage-optimized version (store thumbnail only in localStorage)
+                processedObservation = {
+                    ...observation,
+                    photo: {
+                        id: observation.photo.id || Date.now(),
+                        name: observation.photo.filename || `photo_${Date.now()}.jpg`,
+                        thumbnailData: observation.photo.thumbnailData,
+                        metadata: observation.photo.metadata
+                        // Don't store fullData in localStorage to save space
+                    }
+                };
+                
+                // Store full-resolution photo in IndexedDB if available
+                if (typeof indexedDB !== 'undefined' && observation.photo.fullData) {
+                    await this.storeFullResPhotoInIndexedDB(observation.id, observation.photo);
+                }
+            }
+
+            this.observations.unshift(processedObservation);
             
             if (!this.isOnline) {
                 this.offlineQueue.push({
                     type: 'create',
-                    data: observation,
+                    data: processedObservation,
                     timestamp: new Date().toISOString()
                 });
             }
 
-            return this.saveToLocalStorage();
+            const success = this.saveToLocalStorage();
+            
+            if (success) {
+                console.log('Observation saved with compressed photo');
+                return true;
+            } else {
+                throw new Error('Failed to save to localStorage');
+            }
             
         } catch (error) {
             console.error('Error saving observation:', error);
@@ -2503,6 +2538,80 @@ const EcoLens = {
                 return false;
             }
         }
+    },
+
+    // Store full-resolution photos separately in IndexedDB - ADD THIS FUNCTION
+    async storeFullResPhotoInIndexedDB(observationId, photo) {
+        return new Promise((resolve, reject) => {
+            if (!photo.fullData) {
+                resolve();
+                return;
+            }
+            
+            const request = indexedDB.open('EcoLensPhotos', 1);
+            
+            request.onerror = () => reject(request.error);
+            
+            request.onsuccess = function() {
+                const db = request.result;
+                
+                // Create transaction
+                const transaction = db.transaction(['photos'], 'readwrite');
+                const store = transaction.objectStore('photos');
+                
+                // Store the photo
+                const photoRecord = {
+                    id: `${observationId}_${photo.id || Date.now()}`,
+                    observationId: observationId,
+                    photoId: photo.id || Date.now(),
+                    fullData: photo.fullData,
+                    timestamp: new Date().toISOString()
+                };
+                store.put(photoRecord);
+                
+                transaction.oncomplete = () => resolve();
+                transaction.onerror = () => reject(transaction.error);
+            };
+            
+            request.onupgradeneeded = function(event) {
+                const db = event.target.result;
+                if (!db.objectStoreNames.contains('photos')) {
+                    db.createObjectStore('photos', { keyPath: 'id' });
+                }
+            };
+        });
+    },
+
+    // Retrieve full-res photos for PDF export - ADD THIS FUNCTION TOO
+    async getFullResPhotoForPDF(observationId) {
+        return new Promise((resolve, reject) => {
+            const request = indexedDB.open('EcoLensPhotos', 1);
+            
+            request.onerror = () => reject(request.error);
+            
+            request.onsuccess = function() {
+                const db = request.result;
+                const transaction = db.transaction(['photos'], 'readonly');
+                const store = transaction.objectStore('photos');
+                const getAllRequest = store.getAll();
+                
+                getAllRequest.onsuccess = function() {
+                    const photos = getAllRequest.result.filter(record => 
+                        record.observationId === observationId
+                    );
+                    if (photos.length > 0) {
+                        resolve({
+                            fullData: photos[0].fullData,
+                            id: photos[0].photoId
+                        });
+                    } else {
+                        resolve(null);
+                    }
+                };
+                
+                getAllRequest.onerror = () => reject(getAllRequest.error);
+            };
+        });
     },
 
     // Validate observation data
@@ -3565,58 +3674,72 @@ const EcoLens = {
             return finalY;
         };
 
-        const addPhotoToPDF = async (photoData, doc, x, y, width = 60, height = 40) => {
+                const addPhotoToPDF = async (observationId, doc, x, y, width = 60, height = 40) => {
             return new Promise((resolve) => {
-                if (!photoData || !photoData.data) {
-                    resolve(y);
-                    return;
-                }
-
-                try {
-                    // Check if we need to add a new page for the photo
-                    if (y + height > pageHeight - margin) {
-                        doc.addPage();
-                        currentPage++;
-                        y = margin;
-                        
-                        doc.setFontSize(10);
-                        doc.setTextColor(100);
-                        doc.text(`EcoLens Field Log - Page ${currentPage}`, margin, y);
-                        y += 15;
+                // Try to get full-resolution photo from IndexedDB
+                this.getFullResPhotoForPDF(observationId).then(fullResPhoto => {
+                    const photoData = fullResPhoto ? fullResPhoto.fullData : null;
+                    
+                    if (!photoData) {
+                        // Try to get from observation data
+                        const obs = observations.find(o => o.id === observationId);
+                        if (obs && obs.photo && obs.photo.thumbnailData) {
+                            photoData = obs.photo.thumbnailData;
+                        } else {
+                            resolve(y);
+                            return;
+                        }
                     }
 
-                    // Add photo with caption
-                    doc.setFontSize(9);
-                    doc.setTextColor(100);
-                    doc.text('Photo:', x, y);
-                    y += 4;
+                    try {
+                        // Check if we need to add a new page for the photo
+                        if (y + height > pageHeight - margin) {
+                            doc.addPage();
+                            currentPage++;
+                            y = margin;
+                            
+                            doc.setFontSize(10);
+                            doc.setTextColor(100);
+                            doc.text(`EcoLens Field Log - Page ${currentPage}`, margin, y);
+                            y += 15;
+                        }
 
-                    // Add the image
-                    const img = new Image();
-                    img.onload = () => {
-                        try {
-                            doc.addImage(img, 'JPEG', x, y, width, height);
-                            y += height + 5;
-                            resolve(y);
-                        } catch (error) {
-                            console.error('Error adding image to PDF:', error);
-                            doc.text('[Photo could not be embedded]', x, y);
+                        // Add photo with caption
+                        doc.setFontSize(9);
+                        doc.setTextColor(100);
+                        doc.text('Photo:', x, y);
+                        y += 4;
+
+                        // Add the image
+                        const img = new Image();
+                        img.onload = () => {
+                            try {
+                                doc.addImage(img, 'JPEG', x, y, width, height);
+                                y += height + 5;
+                                resolve(y);
+                            } catch (error) {
+                                console.error('Error adding image to PDF:', error);
+                                doc.text('[Photo could not be embedded]', x, y);
+                                y += 10;
+                                resolve(y);
+                            }
+                        };
+                        img.onerror = () => {
+                            doc.text('[Photo could not be loaded]', x, y);
                             y += 10;
                             resolve(y);
-                        }
-                    };
-                    img.onerror = () => {
-                        doc.text('[Photo could not be loaded]', x, y);
+                        };
+                        img.src = photoData;
+                    } catch (error) {
+                        console.error('Error in addPhotoToPDF:', error);
+                        doc.text('[Photo error]', x, y);
                         y += 10;
                         resolve(y);
-                    };
-                    img.src = photoData.data;
-                } catch (error) {
-                    console.error('Error in addPhotoToPDF:', error);
-                    doc.text('[Photo error]', x, y);
-                    y += 10;
+                    }
+                }).catch(error => {
+                    console.error('Error getting full-res photo:', error);
                     resolve(y);
-                }
+                });
             });
         };
 
@@ -3768,7 +3891,7 @@ const EcoLens = {
                     
                     // Add photo if available
                     if (obs.photo) {
-                        y = await addPhotoToPDF(obs.photo, doc, margin, y);
+                        y = await addPhotoToPDF(obs.id, doc, margin, y);
                     }
                     
                     if (obs.characteristics) {
@@ -5550,80 +5673,123 @@ removePhoto() {
         );
     },
 
-// Handle photo upload - WORKING VERSION with compression
-handlePhotoUpload(event) {
-    const file = event.target.files[0];
-    if (!file) {
-        this.showStatus('No file selected', 'error');
-        return;
-    }
+    // Handle photo upload - REPLACE THE ENTIRE FUNCTION WITH THIS
+    async handlePhotoUpload(event) {
+        const file = event.target.files[0];
+        if (!file) {
+            this.showStatus('No file selected', 'error');
+            return;
+        }
 
-    // Validate file type
-    if (!file.type.startsWith('image/')) {
-        this.showStatus('Please select an image file (JPEG, PNG, etc.)', 'error');
-        event.target.value = '';
-        return;
-    }
+        // Validate file type
+        if (!file.type.startsWith('image/')) {
+            this.showStatus('Please select an image file (JPEG, PNG, etc.)', 'error');
+            event.target.value = '';
+            return;
+        }
 
-    // Validate file size (5MB limit)
-    const MAX_SIZE = 5 * 1024 * 1024; // 5MB
-    if (file.size > MAX_SIZE) {
-        this.showStatus(`Image must be less than ${MAX_SIZE / 1024 / 1024}MB`, 'error');
-        event.target.value = '';
-        return;
-    }
+        // Validate file size (5MB limit)
+        const MAX_SIZE = 5 * 1024 * 1024; // 5MB
+        if (file.size > MAX_SIZE) {
+            this.showStatus(`Image must be less than ${MAX_SIZE / 1024 / 1024}MB`, 'error');
+            event.target.value = '';
+            return;
+        }
 
-    // Show loading state
-    const captureBtn = document.getElementById('capture-photo');
-    const originalText = captureBtn ? captureBtn.innerHTML : '';
-    if (captureBtn) {
-        captureBtn.innerHTML = '<span class="loading"></span> Processing...';
-        captureBtn.disabled = true;
-    }
+        // Show loading state
+        const captureBtn = document.getElementById('capture-photo');
+        const originalText = captureBtn ? captureBtn.innerHTML : '';
+        if (captureBtn) {
+            captureBtn.innerHTML = '<span class="loading"></span> Processing...';
+            captureBtn.disabled = true;
+        }
 
-    const reader = new FileReader();
-    
-    reader.onload = (e) => {
-        const dataUrl = e.target.result;
+        // Show compression status
+        this.showStatus('Compressing photo...', 'info');
+
+        const reader = new FileReader();
         
-        // Validate data URL format
-        if (!dataUrl || !dataUrl.startsWith('data:image/')) {
-            this.showStatus('Invalid image format', 'error');
+        reader.onload = async (e) => {
+            try {
+                const dataUrl = e.target.result;
+                
+                // Validate data URL format
+                if (!dataUrl || !dataUrl.startsWith('data:image/')) {
+                    this.showStatus('Invalid image format', 'error');
+                    if (captureBtn) {
+                        captureBtn.innerHTML = originalText;
+                        captureBtn.disabled = false;
+                    }
+                    return;
+                }
+                
+                // Compress the photo
+                const compressed = await this.compressPhoto(dataUrl, {
+                    maxWidth: 1600,
+                    maxHeight: 1600,
+                    quality: 0.7,
+                    mimeType: 'image/jpeg'
+                });
+                
+                // Create thumbnail for UI
+                const thumbnail = await this.createThumbnail(dataUrl, 200);
+                
+                // Store the photo data with both full and thumbnail versions
+                this.currentPhoto = {
+                    fullData: compressed.data,           // For PDF export
+                    thumbnailData: thumbnail.data,       // For UI display
+                    filename: `ECO_${Date.now()}.jpg`,
+                    type: 'image/jpeg',
+                    metadata: {
+                        width: compressed.width,
+                        height: compressed.height,
+                        originalSize: file.size,
+                        compressedSize: compressed.compressedSize,
+                        compressionRatio: compressed.compressionRatio,
+                        timestamp: new Date().toISOString()
+                    }
+                };
+                
+                // Update the preview with thumbnail
+                this.updatePhotoPreview(thumbnail.data, captureBtn, originalText);
+                
+                // Show compression result
+                this.showStatus(`Photo compressed: ${compressed.compressionRatio}% smaller`, 'success');
+                
+            } catch (error) {
+                console.error('Photo compression failed:', error);
+                this.showStatus('Photo processing failed, using original', 'warning');
+                
+                // Fallback to original
+                const dataUrl = e.target.result;
+                this.currentPhoto = {
+                    fullData: dataUrl,
+                    thumbnailData: dataUrl,
+                    filename: `ECO_${Date.now()}.jpg`,
+                    type: 'image/jpeg',
+                    metadata: {
+                        originalSize: file.size,
+                        compressedSize: file.size,
+                        compressionRatio: 0,
+                        timestamp: new Date().toISOString()
+                    }
+                };
+                
+                this.updatePhotoPreview(dataUrl, captureBtn, originalText);
+            }
+        };
+        
+        reader.onerror = () => {
+            this.showStatus('Error reading file', 'error');
+            event.target.value = '';
             if (captureBtn) {
                 captureBtn.innerHTML = originalText;
                 captureBtn.disabled = false;
             }
-            return;
-        }
+        };
         
-        // Try compression, but fall back to original if it fails
-        this.compressImageSafe(dataUrl, (compressedData) => {
-            // Store the photo data
-            this.currentPhoto = {
-                data: compressedData,
-                filename: `ECO_${Date.now()}.jpg`,
-                type: 'image/jpeg',
-                originalSize: file.size,
-                compressedSize: Math.round(compressedData.length * 3/4),
-                timestamp: new Date().toISOString()
-            };
-            
-            // Update the preview
-            this.updatePhotoPreview(compressedData, captureBtn, originalText);
-        });
-    };
-    
-    reader.onerror = () => {
-        this.showStatus('Error reading file', 'error');
-        event.target.value = '';
-        if (captureBtn) {
-            captureBtn.innerHTML = originalText;
-            captureBtn.disabled = false;
-        }
-    };
-    
-    reader.readAsDataURL(file);
-},
+        reader.readAsDataURL(file);
+    },
 
 // Safe compression that always returns an image
 compressImageSafe(dataUrl, callback) {
@@ -5717,7 +5883,14 @@ updatePhotoPreview(imageData, captureBtn, originalText) {
         const photoRemove = document.getElementById('photo-remove');
         
         if (photoSize && this.currentPhoto) {
-            photoSize.innerHTML = `<i class="fas fa-weight-hanging" aria-hidden="true"></i> Size: ${this.formatBytes(this.currentPhoto.compressedSize)}`;
+            const size = this.currentPhoto.metadata ? 
+                this.formatBytes(this.currentPhoto.metadata.compressedSize) : 
+                this.formatBytes(this.currentPhoto.data.length * 3/4);
+            
+            const ratio = this.currentPhoto.metadata ? 
+                ` (${this.currentPhoto.metadata.compressionRatio}% smaller)` : '';
+            
+            photoSize.innerHTML = `<i class="fas fa-weight-hanging" aria-hidden="true"></i> Size: ${size}${ratio}`;
         }
         if (photoResolution) {
             const width = preview.naturalWidth || preview.width || 0;
@@ -6390,8 +6563,139 @@ updatePhotoPreview(imageData, captureBtn, originalText) {
     // Capitalize first letter
     capitalizeFirst(string) {
         return string ? string.charAt(0).toUpperCase() + string.slice(1) : '';
+    },
+
+    // Photo compression utility
+    async compressPhoto(photoData, options = {}) {
+        const {
+            maxWidth = 1024,
+            maxHeight = 1024,
+            quality = 0.7,
+            mimeType = 'image/jpeg'
+        } = options;
+        
+        return new Promise((resolve, reject) => {
+            const img = new Image();
+            img.crossOrigin = 'anonymous';
+            
+            img.onload = function() {
+                const canvas = document.createElement('canvas');
+                let width = img.width;
+                let height = img.height;
+                
+                // Calculate new dimensions while maintaining aspect ratio
+                if (width > maxWidth) {
+                    height = Math.round((height * maxWidth) / width);
+                    width = maxWidth;
+                }
+                if (height > maxHeight) {
+                    width = Math.round((width * maxHeight) / height);
+                    height = maxHeight;
+                }
+                
+                canvas.width = width;
+                canvas.height = height;
+                
+                const ctx = canvas.getContext('2d');
+                ctx.drawImage(img, 0, 0, width, height);
+                
+                try {
+                    const compressedDataUrl = canvas.toDataURL(mimeType, quality);
+                    resolve({
+                        data: compressedDataUrl,
+                        width: width,
+                        height: height,
+                        originalSize: photoData.length,
+                        compressedSize: compressedDataUrl.length,
+                        compressionRatio: Math.round((1 - (compressedDataUrl.length / photoData.length)) * 100)
+                    });
+                } catch (error) {
+                    console.warn('Compression failed, using original:', error);
+                    resolve({
+                        data: photoData,
+                        width: img.width,
+                        height: img.height,
+                        originalSize: photoData.length,
+                        compressedSize: photoData.length,
+                        compressionRatio: 0
+                    });
+                }
+            };
+            
+            img.onerror = function() {
+                console.warn('Image loading failed, using original');
+                resolve({
+                    data: photoData,
+                    originalSize: photoData.length,
+                    compressedSize: photoData.length,
+                    compressionRatio: 0
+                });
+            };
+            
+            img.src = photoData;
+        });
+    }, // <-- THIS CLOSING BRACE AND COMMA WERE MISSING
+
+    // Migrate existing observations to use compression
+    async migrateExistingObservations() {
+        console.log('Starting photo migration for existing observations...');
+        
+        for (let i = 0; i < this.observations.length; i++) {
+            const obs = this.observations[i];
+            
+            if (obs.photo && obs.photo.data && !obs.photo.thumbnailData) {
+                console.log(`Migrating photo for observation ${obs.id}...`);
+                
+                try {
+                    const compressed = await this.compressPhoto(obs.photo.data, {
+                        maxWidth: 1600,
+                        maxHeight: 1600,
+                        quality: 0.7
+                    });
+                    
+                    const thumbnail = await this.createThumbnail(obs.photo.data, 200);
+                    
+                    this.observations[i].photo = {
+                        ...obs.photo,
+                        fullData: compressed.data,
+                        thumbnailData: thumbnail.data,
+                        metadata: {
+                            width: compressed.width,
+                            height: compressed.height,
+                            originalSize: compressed.originalSize,
+                            compressedSize: compressed.compressedSize,
+                            compressionRatio: compressed.compressionRatio,
+                            timestamp: obs.photo.metadata?.timestamp || new Date().toISOString()
+                        }
+                    };
+                    
+                    // Store full-res in IndexedDB
+                    if (typeof indexedDB !== 'undefined') {
+                        await this.storeFullResPhotoInIndexedDB(obs.id, this.observations[i].photo);
+                    }
+                    
+                } catch (error) {
+                    console.warn(`Migration failed for observation ${obs.id}:`, error);
+                }
+            }
+        }
+        
+        // Save migrated data
+        this.saveToLocalStorage();
+        console.log('Photo migration complete');
+        this.showStatus('Existing photos optimized for storage', 'success');
+    },
+
+    // Quick compression for thumbnails
+    async createThumbnail(photoData, size = 200) {
+        return this.compressPhoto(photoData, {
+            maxWidth: size,
+            maxHeight: size,
+            quality: 0.5,
+            mimeType: 'image/jpeg'
+        });
     }
-};
+}; // <-- This is the closing brace for the EcoLens object
 
 // Initialize the app when DOM is loaded
 document.addEventListener('DOMContentLoaded', () => {
@@ -6424,5 +6728,20 @@ window.addEventListener('beforeunload', () => {
     }
 });
 </script>
+    <!-- Photo Processing Status - ADD THIS BEFORE </body> -->
+    <div id="photo-processing-status" style="
+        position: fixed;
+        bottom: 20px;
+        right: 20px;
+        background: rgba(0, 0, 0, 0.8);
+        color: white;
+        padding: 10px 20px;
+        border-radius: 5px;
+        z-index: 1000;
+        display: none;
+        font-size: 14px;
+    ">
+        <span id="compression-status"></span>
+    </div>
 </body>
 </html>
