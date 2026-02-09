@@ -1,224 +1,115 @@
-Simplest fix: Add auto-import when files are selected. No previews needed.
+Ah, I found the issue! When you click "Edit" on an observation, it doesn't automatically switch to the Record tab. Let me fix that.
 
-Here's exactly what to add:
+The Problem:
 
-Find this section in your code (around line 3545-3550 in your large file):
+When you click the "Edit" button in the Logbook, it calls editObservation() but doesn't switch to the Record tab to show the form with the data.
+
+The Fix:
+
+Find the editObservation() method in your code (around line 3780). Look for this section:
 
 ```javascript
-        // File input change handlers
-        const csvImport = document.getElementById('csv-import');
-        if (csvImport) {
-            csvImport.addEventListener('change', (e) => {
-                if (e.target.files.length > 0) {
-                    const file = e.target.files[0];
-                    const MAX_FILE_SIZE = 10 * 1024 * 1024;
-                    if (file.size > MAX_FILE_SIZE) {
-                        this.showStatus(`File too large. Maximum size is ${MAX_FILE_SIZE / 1024 / 1024}MB`, 'error', 'export');
-                        e.target.value = '';
-                        return;
-                    }
-                    // Don't auto-preview, let user click preview button
-                    this.hideCSVPreview();
-                    this.csvPreviewData = null;
-                    
-                    // Show file selected message
-                    this.showStatus(`CSV file selected: ${file.name} (${this.formatBytes(file.size)})`, 'info', 'export');
-                }
-            });
-        }
+    // Edit an observation
+    editObservation(id) {
+        const observation = this.observations.find(obs => obs.id === id);
+        if (!observation) return;
+
+        const dateTime = new Date(observation.timestamp);
+        const dateStr = dateTime.toISOString().split('T')[0];
+        const timeStr = dateTime.toTimeString().slice(0, 5);
+        // ... rest of the method
 ```
 
-REPLACE that entire section with this:
+At the VERY END of the editObservation() method, after all the form fields are populated, add this line:
 
 ```javascript
-        // File input change handlers - AUTO IMPORT
-        const csvImport = document.getElementById('csv-import');
-        if (csvImport) {
-            csvImport.addEventListener('change', (e) => {
-                if (e.target.files.length > 0) {
-                    const file = e.target.files[0];
-                    const MAX_FILE_SIZE = 10 * 1024 * 1024;
-                    if (file.size > MAX_FILE_SIZE) {
-                        this.showStatus(`File too large. Maximum size is ${MAX_FILE_SIZE / 1024 / 1024}MB`, 'error', 'export');
-                        e.target.value = '';
-                        return;
-                    }
-                    
-                    // Auto-import the CSV file
-                    this.importCSVFile(file);
-                }
-            });
-        }
+        // Switch to Record tab after populating form
+        this.switchTab('record');
 ```
 
-Then find this JSON section (right after the CSV section):
+So the end of your editObservation() method should look like this:
 
 ```javascript
-        const jsonImport = document.getElementById('json-import');
-        if (jsonImport) {
-            jsonImport.addEventListener('change', (e) => {
-                if (e.target.files.length > 0) {
-                    const file = e.target.files[0];
-                    const MAX_FILE_SIZE = 10 * 1024 * 1024;
-                    if (file.size > MAX_FILE_SIZE) {
-                        this.showStatus(`File too large. Maximum size is ${MAX_FILE_SIZE / 1024 / 1024}MB`, 'error', 'export');
-                        e.target.value = '';
-                        return;
-                    }
-                    // Don't auto-preview, let user click preview button
-                    this.hideJSONPreview();
-                    this.jsonPreviewData = null;
-                    
-                    // Show file selected message
-                    this.showStatus(`JSON file selected: ${file.name} (${this.formatBytes(file.size)})`, 'info', 'export');
-                }
-            });
+        const recordBtn = document.getElementById('record-btn');
+        if (recordBtn) {
+            recordBtn.innerHTML = '<i class="fas fa-save"></i> Update Observation';
+            recordBtn.dataset.editingId = id;
+            recordBtn.onclick = () => this.handleUpdateObservation(id);
         }
-```
-
-REPLACE that entire section with this:
-
-```javascript
-        const jsonImport = document.getElementById('json-import');
-        if (jsonImport) {
-            jsonImport.addEventListener('change', (e) => {
-                if (e.target.files.length > 0) {
-                    const file = e.target.files[0];
-                    const MAX_FILE_SIZE = 10 * 1024 * 1024;
-                    if (file.size > MAX_FILE_SIZE) {
-                        this.showStatus(`File too large. Maximum size is ${MAX_FILE_SIZE / 1024 / 1024}MB`, 'error', 'export');
-                        e.target.value = '';
-                        return;
-                    }
-                    
-                    // Auto-import the JSON file
-                    this.importJSONFile(file);
-                }
-            });
-        }
-```
-
-Then add these two new methods to your EcoLens object:
-
-Add these methods anywhere in your EcoLens object (I suggest adding them after the loadObservations() method around line 1060):
-
-```javascript
-    // Simple CSV import (no preview)
-    importCSVFile(file) {
-        const reader = new FileReader();
         
-        reader.onload = (e) => {
-            try {
-                this.showStatus('Processing CSV file...', 'info', 'export');
-                const validationResult = this.validateAndParseCSV(e.target.result);
-                
-                if (validationResult.errors.length > 0) {
-                    this.showStatus(`CSV has errors: ${validationResult.errors[0]}`, 'error', 'export');
-                    return;
-                }
-                
-                if (validationResult.validRows === 0) {
-                    this.showStatus('No valid observations found in CSV', 'error', 'export');
-                    return;
-                }
-                
-                const mode = document.getElementById('import-mode')?.value || 'append';
-                
-                if (mode === 'replace' && this.observations.length > 0) {
-                    if (!confirm('WARNING: This will replace ALL existing observations with the imported data. Are you sure?')) {
-                        this.showStatus('Import cancelled', 'info', 'export');
-                        return;
-                    }
-                }
-                
-                this.importObservationsFromCSV(validationResult, mode)
-                    .then(result => {
-                        this.showStatus(`Imported ${result.imported} observations successfully!`, 'success', 'export');
-                    })
-                    .catch(error => {
-                        this.showStatus(`Import failed: ${error.message}`, 'error', 'export');
-                    });
-                    
-            } catch (error) {
-                this.showStatus(`CSV error: ${error.message}`, 'error', 'export');
-            }
-        };
+        // ADD THIS LINE - Switch to Record tab
+        this.switchTab('record');
         
-        reader.onerror = () => {
-            this.showStatus('Error reading file', 'error', 'export');
-        };
-        
-        reader.readAsText(file, 'UTF-8');
-    },
-
-    // Simple JSON import (no preview)
-    importJSONFile(file) {
-        const reader = new FileReader();
-        
-        reader.onload = (e) => {
-            try {
-                this.showStatus('Processing JSON file...', 'info', 'export');
-                
-                let jsonData;
-                try {
-                    jsonData = JSON.parse(e.target.result);
-                } catch (parseError) {
-                    throw new Error(`Invalid JSON format: ${parseError.message}`);
-                }
-                
-                const validationResult = this.validateJSONData(jsonData);
-                
-                if (validationResult.errors.length > 0) {
-                    this.showStatus(`JSON has errors: ${validationResult.errors[0]}`, 'error', 'export');
-                    return;
-                }
-                
-                if (validationResult.validCount === 0) {
-                    this.showStatus('No valid observations found in JSON', 'error', 'export');
-                    return;
-                }
-                
-                const modeElement = document.getElementById('json-import-mode');
-                const mode = modeElement ? modeElement.value : 'append';
-                
-                if (mode === 'replace' && this.observations.length > 0) {
-                    if (!confirm('WARNING: This will replace ALL existing observations with the imported data. Are you sure?')) {
-                        this.showStatus('Import cancelled', 'info', 'export');
-                        return;
-                    }
-                }
-                
-                const result = this.importObservationsFromJSON(validationResult, mode);
-                this.showStatus(`Imported ${result.imported} observations successfully!`, 'success', 'export');
-                
-            } catch (error) {
-                this.showStatus(`JSON error: ${error.message}`, 'error', 'export');
-            }
-        };
-        
-        reader.onerror = () => {
-            this.showStatus('Error reading file', 'error', 'export');
-        };
-        
-        reader.readAsText(file, 'UTF-8');
+        if (observerNameInput) observerNameInput.focus();
     },
 ```
 
-What this does:
+Alternative: If you want it to scroll to the form on mobile too:
 
-1. When you select a CSV file → It automatically imports it (no preview button needed)
-2. When you select a JSON file → It automatically imports it (no preview button needed)
-3. Shows status messages → Tells you what's happening
-4. Asks for confirmation → If replacing data
-5. Still validates → Checks for errors before importing
+Replace that last part with:
 
-To use it:
+```javascript
+        const recordBtn = document.getElementById('record-btn');
+        if (recordBtn) {
+            recordBtn.innerHTML = '<i class="fas fa-save"></i> Update Observation';
+            recordBtn.dataset.editingId = id;
+            recordBtn.onclick = () => this.handleUpdateObservation(id);
+        }
+        
+        // Switch to Record tab and scroll to form
+        this.switchTab('record');
+        
+        // Scroll to the form on mobile
+        setTimeout(() => {
+            if (window.innerWidth < 768) {
+                const recordPanel = document.getElementById('record-panel');
+                if (recordPanel) {
+                    recordPanel.scrollIntoView({ behavior: 'smooth' });
+                }
+            }
+        }, 100);
+        
+        if (observerNameInput) observerNameInput.focus();
+    },
+```
 
-1. Go to the "Export" tab
-2. Click "Choose File" under CSV Import
-3. Select your CSV file
-4. It will automatically import and show you the result
+Also, let's make the "Edit" button more obvious in the UI:
 
-Note: The "Preview CSV Import" and "Preview JSON Import" buttons will still work if you want previews, but the simple selection will auto-import.
+You might want to add some visual feedback. Add this at the end of editObservation():
 
-This is the simplest fix that gives you immediate file import functionality without changing much code!
+```javascript
+        // Show editing status
+        this.showStatus(`Editing observation ${id}`, 'info');
+```
+
+So the complete fix for the end of editObservation() is:
+
+```javascript
+        const recordBtn = document.getElementById('record-btn');
+        if (recordBtn) {
+            recordBtn.innerHTML = '<i class="fas fa-save"></i> Update Observation';
+            recordBtn.dataset.editingId = id;
+            recordBtn.onclick = () => this.handleUpdateObservation(id);
+        }
+        
+        // Switch to Record tab
+        this.switchTab('record');
+        
+        // Show editing status
+        this.showStatus(`Editing observation ${id}`, 'info');
+        
+        if (observerNameInput) observerNameInput.focus();
+    },
+```
+
+Summary:
+
+The issue was that editObservation() was populating the form fields but not switching tabs. Adding this.switchTab('record') tells the app to switch to the Record tab where the editing form is located.
+
+Now when you click "Edit" on any observation in the Logbook:
+
+1. It populates the form with that observation's data
+2. Automatically switches to the Record tab
+3. Changes the button to say "Update Observation"
+4. Shows a status message
+5. Focuses on the first field for easy editing
