@@ -1,4 +1,4 @@
-<!-- Working Version 2.2.6.5. DeepSeek JS replacement. Photo function repaired. Has Data Import issue. -->
+<!-- Working Version 2.2.6.9. Data Import Issues Now Fixed.  -->
 
 <!DOCTYPE html>
 <html lang="en">
@@ -2475,7 +2475,7 @@ const EcoLens = {
         };
     },
 
-    // Save observation to localStorage - REPLACE WITH THIS
+    // Save observation to localStorage
     async saveObservation(observation) {
         try {
             if (!this.validateObservation(observation)) {
@@ -2538,7 +2538,7 @@ const EcoLens = {
         }
     },
 
-    // Store full-resolution photos separately in IndexedDB - ADD THIS FUNCTION
+    // Store full-resolution photos separately in IndexedDB
     async storeFullResPhotoInIndexedDB(observationId, photo) {
         return new Promise((resolve, reject) => {
             if (!photo.fullData) {
@@ -2580,7 +2580,7 @@ const EcoLens = {
         });
     },
 
-    // Retrieve full-res photos for PDF export - ADD THIS FUNCTION TOO
+    // Retrieve full-res photos for PDF export
     async getFullResPhotoForPDF(observationId) {
         return new Promise((resolve, reject) => {
             const request = indexedDB.open('EcoLensPhotos', 1);
@@ -2805,6 +2805,106 @@ const EcoLens = {
         }
     },
 
+    // Simple CSV import (no preview)
+    importCSVFile(file) {
+        const reader = new FileReader();
+        
+        reader.onload = (e) => {
+            try {
+                this.showStatus('Processing CSV file...', 'info', 'export');
+                const validationResult = this.validateAndParseCSV(e.target.result);
+                
+                if (validationResult.errors.length > 0) {
+                    this.showStatus(`CSV has errors: ${validationResult.errors[0]}`, 'error', 'export');
+                    return;
+                }
+                
+                if (validationResult.validRows === 0) {
+                    this.showStatus('No valid observations found in CSV', 'error', 'export');
+                    return;
+                }
+                
+                const mode = document.getElementById('import-mode')?.value || 'append';
+                
+                if (mode === 'replace' && this.observations.length > 0) {
+                    if (!confirm('WARNING: This will replace ALL existing observations with the imported data. Are you sure?')) {
+                        this.showStatus('Import cancelled', 'info', 'export');
+                        return;
+                    }
+                }
+                
+                this.importObservationsFromCSV(validationResult, mode)
+                    .then(result => {
+                        this.showStatus(`Imported ${result.imported} observations successfully!`, 'success', 'export');
+                    })
+                    .catch(error => {
+                        this.showStatus(`Import failed: ${error.message}`, 'error', 'export');
+                    });
+                    
+            } catch (error) {
+                this.showStatus(`CSV error: ${error.message}`, 'error', 'export');
+            }
+        };
+        
+        reader.onerror = () => {
+            this.showStatus('Error reading file', 'error', 'export');
+        };
+        
+        reader.readAsText(file, 'UTF-8');
+    },
+
+    // Simple JSON import (no preview)
+    importJSONFile(file) {
+        const reader = new FileReader();
+        
+        reader.onload = (e) => {
+            try {
+                this.showStatus('Processing JSON file...', 'info', 'export');
+                
+                let jsonData;
+                try {
+                    jsonData = JSON.parse(e.target.result);
+                } catch (parseError) {
+                    throw new Error(`Invalid JSON format: ${parseError.message}`);
+                }
+                
+                const validationResult = this.validateJSONData(jsonData);
+                
+                if (validationResult.errors.length > 0) {
+                    this.showStatus(`JSON has errors: ${validationResult.errors[0]}`, 'error', 'export');
+                    return;
+                }
+                
+                if (validationResult.validCount === 0) {
+                    this.showStatus('No valid observations found in JSON', 'error', 'export');
+                    return;
+                }
+                
+                const modeElement = document.getElementById('json-import-mode');
+                const mode = modeElement ? modeElement.value : 'append';
+                
+                if (mode === 'replace' && this.observations.length > 0) {
+                    if (!confirm('WARNING: This will replace ALL existing observations with the imported data. Are you sure?')) {
+                        this.showStatus('Import cancelled', 'info', 'export');
+                        return;
+                    }
+                }
+                
+                const result = this.importObservationsFromJSON(validationResult, mode);
+                this.showStatus(`Imported ${result.imported} observations successfully!`, 'success', 'export');
+                
+            } catch (error) {
+                this.showStatus(`JSON error: ${error.message}`, 'error', 'export');
+            }
+        };
+        
+        reader.onerror = () => {
+            this.showStatus('Error reading file', 'error', 'export');
+        };
+        
+        reader.readAsText(file, 'UTF-8');
+    },
+
     // Parse CSV line
     parseCSVLine(line) {
         const result = [];
@@ -2880,7 +2980,7 @@ const EcoLens = {
         try {
             const lines = csvContent.replace(/\r\n/g, '\n').replace(/\r/g, '\n').split('\n');
             const trimmedLines = lines.map(line => line.trim()).filter(line => line !== '');
-            
+
             if (trimmedLines.length < 2) {
                 throw new Error('CSV file is empty or has no data rows');
             }
@@ -3672,7 +3772,7 @@ const EcoLens = {
             return finalY;
         };
 
-                const addPhotoToPDF = async (observationId, doc, x, y, width = 60, height = 40) => {
+        const addPhotoToPDF = async (observationId, doc, x, y, width = 60, height = 40) => {
             return new Promise((resolve) => {
                 // Try to get full-resolution photo from IndexedDB
                 this.getFullResPhotoForPDF(observationId).then(fullResPhoto => {
@@ -4036,7 +4136,7 @@ const EcoLens = {
         return filtered;
     },
 
-    // Setup all event listeners - FIXED: Photo removal
+    // Setup event listeners
     setupEventListeners() {
         // Tab navigation
         document.querySelectorAll('.tab-btn').forEach(btn => {
@@ -4078,7 +4178,7 @@ const EcoLens = {
             });
         }
 
-        // Photo handling - SIMPLIFIED FIX
+        // Photo handling
         const photoRemoveBtn = document.getElementById('photo-remove');
         if (photoRemoveBtn) {
             // Add click event to the remove button
@@ -4202,8 +4302,11 @@ const EcoLens = {
             importLogbookBtn.addEventListener('click', () => {
                 this.switchTab('export');
                 setTimeout(() => {
-                    const csvImportBtn = document.getElementById('csv-import');
-                    if (csvImportBtn) csvImportBtn.click();
+                    // Scroll to import section
+                    const importSection = document.querySelector('.import-section');
+                    if (importSection) {
+                        importSection.scrollIntoView({ behavior: 'smooth' });
+                    }
                 }, 100);
             });
         }
@@ -4237,7 +4340,7 @@ const EcoLens = {
             });
         }
 
-        // File input change handlers
+        // File input change handlers - AUTO IMPORT
         const csvImport = document.getElementById('csv-import');
         if (csvImport) {
             csvImport.addEventListener('change', (e) => {
@@ -4249,8 +4352,9 @@ const EcoLens = {
                         e.target.value = '';
                         return;
                     }
-                    this.hideCSVPreview();
-                    this.csvPreviewData = null;
+                    
+                    // Auto-import the CSV file
+                    this.importCSVFile(file);
                 }
             });
         }
@@ -4266,8 +4370,9 @@ const EcoLens = {
                         e.target.value = '';
                         return;
                     }
-                    this.hideJSONPreview();
-                    this.jsonPreviewData = null;
+                    
+                    // Auto-import the JSON file
+                    this.importJSONFile(file);
                 }
             });
         }
@@ -4331,7 +4436,184 @@ const EcoLens = {
                     errors: validationResult.errors.length
                 });
                 
-                this.showCSVPreview(validationResult);
+                // Show CSV preview with table data
+                const previewSection = document.getElementById('csv-preview-section');
+                const statsDiv = document.getElementById('validation-stats');
+                const summaryDiv = document.getElementById('validation-summary');
+                const previewTable = document.getElementById('csv-preview-table');
+                
+                if (!previewSection) {
+                    console.error('CSV preview section not found');
+                    return;
+                }
+                
+                summaryDiv.innerHTML = '';
+                if (previewTable) previewTable.innerHTML = '';
+                
+                if (statsDiv) {
+                    const validCountEl = document.getElementById('valid-count');
+                    const invalidCountEl = document.getElementById('invalid-count');
+                    const warningCountEl = document.getElementById('warning-count');
+                    const skippedCountEl = document.getElementById('skipped-count');
+                    const metadataCountEl = document.getElementById('metadata-count');
+                    
+                    if (validCountEl) validCountEl.textContent = `${validationResult.validRows}`;
+                    if (invalidCountEl) invalidCountEl.textContent = `${validationResult.invalidRows}`;
+                    if (warningCountEl) warningCountEl.textContent = `${validationResult.warningRows}`;
+                    if (skippedCountEl) skippedCountEl.textContent = `${validationResult.skippedRows}`;
+                    if (metadataCountEl) metadataCountEl.textContent = `${validationResult.metadataRows}`;
+                    
+                    statsDiv.style.display = 'flex';
+                }
+                
+                let summaryHTML = `<div class="status-${validationResult.errors.length > 0 ? 'error' : validationResult.warnings.length > 0 ? 'warning' : 'success'} validation-summary">`;
+                summaryHTML += `<strong>Validation Summary:</strong> ${validationResult.summary}`;
+                
+                if (validationResult.skippedRows > 0) {
+                    summaryHTML += `<div class="validation-info">`;
+                    summaryHTML += `<strong>📄 Header Detection:</strong> Found headers at row ${validationResult.headerRowIndex + 1}, skipped ${validationResult.skippedRows} row${validationResult.skippedRows > 1 ? 's' : ''} as metadata`;
+                    summaryHTML += `</div>`;
+                }
+                
+                if (validationResult.errors.length > 0) {
+                    summaryHTML += '<div class="validation-errors">';
+                    summaryHTML += '<strong>❌ Critical Errors (must be fixed):</strong>';
+                    const errorCount = Math.min(validationResult.errors.length, 5);
+                    for (let i = 0; i < errorCount; i++) {
+                        summaryHTML += `<div class="validation-error">${validationResult.errors[i]}</div>`;
+                    }
+                    if (validationResult.errors.length > 5) {
+                        summaryHTML += `<div class="validation-error">... and ${validationResult.errors.length - 5} more errors</div>`;
+                    }
+                    summaryHTML += '</div>';
+                }
+                
+                if (validationResult.warnings.length > 0) {
+                    summaryHTML += '<div class="validation-warnings">';
+                    summaryHTML += '<strong>⚠️ Warnings (should be reviewed):</strong>';
+                    const warningCount = Math.min(validationResult.warnings.length, 5);
+                    for (let i = 0; i < warningCount; i++) {
+                        summaryHTML += `<div class="validation-warning">${validationResult.warnings[i]}</div>`;
+                    }
+                    if (validationResult.warnings.length > 5) {
+                        summaryHTML += `<div class="validation-warning">... and ${validationResult.warnings.length - 5} more warnings</div>`;
+                    }
+                    summaryHTML += '</div>';
+                }
+                
+                const sampleObs = validationResult.rows[0];
+                if (sampleObs && sampleObs.data) {
+                    summaryHTML += '<div class="sample-preview">';
+                    summaryHTML += '<strong>📋 Sample Observation:</strong><br>';
+                    summaryHTML += `<code>${this.escapeHtml(sampleObs.data.scientificName)} - ${new Date(sampleObs.data.timestamp).toLocaleDateString()}`;
+                    if (sampleObs.data.photo) {
+                        summaryHTML += ' (with photo)';
+                    }
+                    summaryHTML += '</code>';
+                    summaryHTML += '</div>';
+                }
+                
+                summaryHTML += '</div>';
+                if (summaryDiv) summaryDiv.innerHTML = summaryHTML;
+                
+                const miniMapContainer = document.getElementById('mini-map-container');
+                if (validationResult.hasCoordinates && validationResult.coordinates.length > 0 && miniMapContainer) {
+                    this.showMiniMap(validationResult.coordinates);
+                    miniMapContainer.style.display = 'block';
+                } else if (miniMapContainer) {
+                    miniMapContainer.style.display = 'none';
+                }
+                
+                // Build preview table (limit to first 10 rows)
+                const maxPreviewRows = 10;
+                const rowsToShow = validationResult.rows.slice(0, maxPreviewRows);
+                
+                if (rowsToShow.length > 0 && rowsToShow[0].data) {
+                    let tableHTML = '<thead><tr>';
+                    
+                    // Create table headers
+                    validationResult.headers.forEach(header => {
+                        const REQUIRED_CSV_HEADERS = [
+                            'Observer Name', 'Scientific Name', 'Location', 'Habitat', 'Observation Type'
+                        ];
+                        const isRequired = REQUIRED_CSV_HEADERS.includes(header);
+                        tableHTML += `<th scope="col">${header}${isRequired ? ' <span class="required-asterisk">*</span>' : ''}</th>`;
+                    });
+                    tableHTML += '<th scope="col">Status</th></tr></thead><tbody>';
+                    
+                    // Add rows
+                    rowsToShow.forEach((row, rowIndex) => {
+                        let rowClass = '';
+                        let status = '';
+                        let statusIcon = '';
+                        
+                        if (row.errors.length > 0) {
+                            rowClass = 'error-row';
+                            statusIcon = '❌';
+                            status = `${row.errors.length} error(s)`;
+                        } else if (row.warnings.length > 0) {
+                            rowClass = 'warning-row';
+                            statusIcon = '⚠️';
+                            status = `${row.warnings.length} warning(s)`;
+                        } else {
+                            rowClass = 'valid-row';
+                            statusIcon = '✅';
+                            status = 'Valid';
+                        }
+                        
+                        if (row.data && row.data['_coordinateStatus']) {
+                            status += ` | ${row.data['_coordinateStatus']}`;
+                        }
+                        
+                        tableHTML += `<tr class="${rowClass}" title="Original row ${row.originalLineNumber}">`;
+                        
+                        // Add cell data
+                        validationResult.headers.forEach(header => {
+                            let value = row.data ? row.data[header] || '' : '';
+                            let displayValue = value;
+                            
+                            if (value.length > 30) {
+                                displayValue = value.substring(0, 30) + '...';
+                            }
+                            
+                            displayValue = this.escapeHtml(displayValue);
+                            const title = value.length > 30 ? this.escapeHtml(value) : '';
+                            
+                            tableHTML += `<td title="${title}">${displayValue}</td>`;
+                        });
+                        
+                        tableHTML += `<td><span class="status-icon">${statusIcon}</span> ${status}</td></tr>`;
+                    });
+                    
+                    // Add message if there are more rows
+                    if (validationResult.rows.length > maxPreviewRows) {
+                        tableHTML += `<tr><td colspan="${validationResult.headers.length + 1}" style="text-align: center; font-style: italic; padding: 1rem;">
+                            ... and ${validationResult.rows.length - maxPreviewRows} more rows
+                        </td></tr>`;
+                    }
+                    
+                    tableHTML += '</tbody>';
+                    previewTable.innerHTML = tableHTML;
+                } else if (rowsToShow.length > 0) {
+                    previewTable.innerHTML = `
+                        <tr class="error-row">
+                            <td colspan="${validationResult.headers.length + 1}" style="text-align: center; padding: 2rem;">
+                                <strong>No valid data to display</strong><br>
+                                <small>All rows contain critical errors</small>
+                            </td>
+                        </tr>
+                    `;
+                }
+                
+                // Show the preview section
+                previewSection.style.display = 'block';
+                previewSection.scrollIntoView({ behavior: 'smooth' });
+                
+                // Focus first button for accessibility
+                setTimeout(() => {
+                    const firstButton = previewSection.querySelector('button');
+                    if (firstButton) firstButton.focus();
+                }, 100);
                 
                 if (previewBtn) {
                     previewBtn.innerHTML = originalText;
@@ -4367,181 +4649,6 @@ const EcoLens = {
         };
 
         reader.readAsText(file, 'UTF-8');
-    },
-
-    // Show CSV preview
-    showCSVPreview(validationResult) {
-        const previewSection = document.getElementById('csv-preview-section');
-        const statsDiv = document.getElementById('validation-stats');
-        const summaryDiv = document.getElementById('validation-summary');
-        const previewTable = document.getElementById('csv-preview-table');
-        
-        if (!previewSection) {
-            console.error('CSV preview section not found');
-            return;
-        }
-        
-        summaryDiv.innerHTML = '';
-        if (previewTable) previewTable.innerHTML = '';
-        
-        if (statsDiv) {
-            const validCountEl = document.getElementById('valid-count');
-            const invalidCountEl = document.getElementById('invalid-count');
-            const warningCountEl = document.getElementById('warning-count');
-            const skippedCountEl = document.getElementById('skipped-count');
-            const metadataCountEl = document.getElementById('metadata-count');
-            
-            if (validCountEl) validCountEl.textContent = `${validationResult.validRows}`;
-            if (invalidCountEl) invalidCountEl.textContent = `${validationResult.invalidRows}`;
-            if (warningCountEl) warningCountEl.textContent = `${validationResult.warningRows}`;
-            if (skippedCountEl) skippedCountEl.textContent = `${validationResult.skippedRows}`;
-            if (metadataCountEl) metadataCountEl.textContent = `${validationResult.metadataRows}`;
-            
-            statsDiv.style.display = 'flex';
-        }
-        
-        let summaryHTML = `<div class="status-${validationResult.errors.length > 0 ? 'error' : validationResult.warnings.length > 0 ? 'warning' : 'success'} validation-summary">`;
-        summaryHTML += `<strong>Validation Summary:</strong> ${validationResult.summary}`;
-        
-        if (validationResult.skippedRows > 0) {
-            summaryHTML += `<div class="validation-info">`;
-            summaryHTML += `<strong>📄 Header Detection:</strong> Found headers at row ${validationResult.headerRowIndex + 1}, skipped ${validationResult.skippedRows} row${validationResult.skippedRows > 1 ? 's' : ''} as metadata`;
-            summaryHTML += `</div>`;
-        }
-        
-        if (validationResult.errors.length > 0) {
-            summaryHTML += '<div class="validation-errors">';
-            summaryHTML += '<strong>❌ Critical Errors (must be fixed):</strong>';
-            const errorCount = Math.min(validationResult.errors.length, 5);
-            for (let i = 0; i < errorCount; i++) {
-                summaryHTML += `<div class="validation-error">${validationResult.errors[i]}</div>`;
-            }
-            if (validationResult.errors.length > 5) {
-                summaryHTML += `<div class="validation-error">... and ${validationResult.errors.length - 5} more errors</div>`;
-            }
-            summaryHTML += '</div>';
-        }
-        
-        if (validationResult.warnings.length > 0) {
-            summaryHTML += '<div class="validation-warnings">';
-            summaryHTML += '<strong>⚠️ Warnings (should be reviewed):</strong>';
-            const warningCount = Math.min(validationResult.warnings.length, 5);
-            for (let i = 0; i < warningCount; i++) {
-                summaryHTML += `<div class="validation-warning">${validationResult.warnings[i]}</div>`;
-            }
-            if (validationResult.warnings.length > 5) {
-                summaryHTML += `<div class="validation-warning">... and ${validationResult.warnings.length - 5} more warnings</div>`;
-            }
-            summaryHTML += '</div>';
-        }
-        
-        const sampleObs = validationResult.rows[0];
-        if (sampleObs && sampleObs.data) {
-            summaryHTML += '<div class="sample-preview">';
-            summaryHTML += '<strong>📋 Sample Observation:</strong><br>';
-            summaryHTML += `<code>${this.escapeHtml(sampleObs.data.scientificName)} - ${new Date(sampleObs.data.timestamp).toLocaleDateString()}`;
-            if (sampleObs.data.photo) {
-                summaryHTML += ' (with photo)';
-            }
-            summaryHTML += '</code>';
-            summaryHTML += '</div>';
-        }
-        
-        summaryHTML += '</div>';
-        if (summaryDiv) summaryDiv.innerHTML = summaryHTML;
-        
-        const miniMapContainer = document.getElementById('mini-map-container');
-        if (validationResult.hasCoordinates && validationResult.coordinates.length > 0 && miniMapContainer) {
-            this.showMiniMap(validationResult.coordinates);
-            miniMapContainer.style.display = 'block';
-        } else if (miniMapContainer) {
-            miniMapContainer.style.display = 'none';
-        }
-        
-        if (previewTable) {
-            const maxPreviewRows = 10;
-            const rowsToShow = validationResult.rows.slice(0, maxPreviewRows);
-            
-            if (rowsToShow.length > 0 && rowsToShow[0].data) {
-                let tableHTML = '<thead><tr>';
-                validationResult.headers.forEach(header => {
-                    const REQUIRED_CSV_HEADERS = [
-                        'Observer Name', 'Scientific Name', 'Location', 'Habitat', 'Observation Type'
-                    ];
-                    const isRequired = REQUIRED_CSV_HEADERS.includes(header);
-                    tableHTML += `<th scope="col">${header}${isRequired ? ' <span class="required-asterisk">*</span>' : ''}</th>`;
-                });
-                tableHTML += '<th scope="col">Status</th></tr></thead><tbody>';
-                
-                rowsToShow.forEach((row, rowIndex) => {
-                    let rowClass = '';
-                    let status = '';
-                    let statusIcon = '';
-                    
-                    if (row.errors.length > 0) {
-                        rowClass = 'error-row';
-                        statusIcon = '❌';
-                        status = `${row.errors.length} error(s)`;
-                    } else if (row.warnings.length > 0) {
-                        rowClass = 'warning-row';
-                        statusIcon = '⚠️';
-                        status = `${row.warnings.length} warning(s)`;
-                    } else {
-                        rowClass = 'valid-row';
-                        statusIcon = '✅';
-                        status = 'Valid';
-                    }
-                    
-                    if (row.data && row.data['_coordinateStatus']) {
-                        status += ` | ${row.data['_coordinateStatus']}`;
-                    }
-                    
-                    tableHTML += `<tr class="${rowClass}" title="Original row ${row.originalLineNumber}">`;
-                    
-                    validationResult.headers.forEach(header => {
-                        let value = row.data ? row.data[header] || '' : '';
-                        let displayValue = value;
-                        
-                        if (value.length > 30) {
-                            displayValue = value.substring(0, 30) + '...';
-                        }
-                        
-                        displayValue = this.escapeHtml(displayValue);
-                        const title = value.length > 30 ? this.escapeHtml(value) : '';
-                        
-                        tableHTML += `<td title="${title}">${displayValue}</td>`;
-                    });
-                    
-                    tableHTML += `<td><span class="status-icon">${statusIcon}</span> ${status}</td></tr>`;
-                });
-                
-                if (validationResult.rows.length > maxPreviewRows) {
-                    tableHTML += `<tr><td colspan="${validationResult.headers.length + 1}" style="text-align: center; font-style: italic; padding: 1rem;">
-                        ... and ${validationResult.rows.length - maxPreviewRows} more rows
-                    </td></tr>`;
-                }
-                
-                tableHTML += '</tbody>';
-                previewTable.innerHTML = tableHTML;
-            } else if (rowsToShow.length > 0) {
-                previewTable.innerHTML = `
-                    <tr class="error-row">
-                        <td colspan="${validationResult.headers.length + 1}" style="text-align: center; padding: 2rem;">
-                            <strong>No valid data to display</strong><br>
-                            <small>All rows contain critical errors</small>
-                        </td>
-                    </tr>
-                `;
-            }
-        }
-        
-        previewSection.style.display = 'block';
-        previewSection.scrollIntoView({ behavior: 'smooth' });
-        
-        setTimeout(() => {
-            const firstButton = previewSection.querySelector('button');
-            if (firstButton) firstButton.focus();
-        }, 100);
     },
 
     // Handle CSV import confirmation
@@ -5335,44 +5442,44 @@ const EcoLens = {
         if (observerName) observerName.focus();
     },
 
-// Remove photo - SIMPLIFIED
-removePhoto() {
-    console.log('Removing photo');
-    
-    // Clear photo data
-    this.currentPhoto = null;
-    
-    // Hide preview
-    const preview = document.getElementById('photo-preview');
-    if (preview) {
-        preview.style.display = 'none';
-        preview.src = '';
-        // Clean up any event listeners
-        preview.onload = null;
-        preview.onerror = null;
-    }
-    
-    // Hide remove button
-    const removeBtn = document.getElementById('photo-remove');
-    if (removeBtn) {
-        removeBtn.style.display = 'none';
-    }
-    
-    // Hide info
-    const photoInfo = document.getElementById('photo-info');
-    if (photoInfo) {
-        photoInfo.style.display = 'none';
-    }
-    
-    // Reset file input
-    const fileInput = document.getElementById('photo-upload');
-    if (fileInput) {
-        fileInput.value = '';
-    }
-    
-    // Show feedback
-    this.showStatus('Photo removed', 'success');
-},
+    // Remove photo
+    removePhoto() {
+        console.log('Removing photo');
+        
+        // Clear photo data
+        this.currentPhoto = null;
+        
+        // Hide preview
+        const preview = document.getElementById('photo-preview');
+        if (preview) {
+            preview.style.display = 'none';
+            preview.src = '';
+            // Clean up any event listeners
+            preview.onload = null;
+            preview.onerror = null;
+        }
+        
+        // Hide remove button
+        const removeBtn = document.getElementById('photo-remove');
+        if (removeBtn) {
+            removeBtn.style.display = 'none';
+        }
+        
+        // Hide info
+        const photoInfo = document.getElementById('photo-info');
+        if (photoInfo) {
+            photoInfo.style.display = 'none';
+        }
+        
+        // Reset file input
+        const fileInput = document.getElementById('photo-upload');
+        if (fileInput) {
+            fileInput.value = '';
+        }
+        
+        // Show feedback
+        this.showStatus('Photo removed', 'success');
+    },
 
     // Toggle map visibility
     toggleMap(show = null) {
@@ -5409,7 +5516,7 @@ removePhoto() {
         }
     },
 
-    // Initialize Leaflet map - FIXED for dark mode
+    // Initialize Leaflet map
     initMap() {
         const mapElement = document.getElementById('map');
         if (!mapElement || typeof L === 'undefined') {
@@ -5671,7 +5778,7 @@ removePhoto() {
         );
     },
 
-    // Handle photo upload - REPLACE THE ENTIRE FUNCTION WITH THIS
+    // Handle photo upload
     async handlePhotoUpload(event) {
         const file = event.target.files[0];
         if (!file) {
@@ -5789,166 +5896,166 @@ removePhoto() {
         reader.readAsDataURL(file);
     },
 
-// Safe compression that always returns an image
-compressImageSafe(dataUrl, callback) {
-    try {
-        const img = new Image();
-        
-        img.onload = () => {
-            try {
-                // Create canvas and compress
-                const canvas = document.createElement('canvas');
-                const maxWidth = 1920;
-                const maxHeight = 1080;
-                let width = img.width;
-                let height = img.height;
-                
-                // Resize if too large
-                if (width > maxWidth || height > maxHeight) {
-                    const ratio = Math.min(maxWidth / width, maxHeight / height);
-                    width = Math.floor(width * ratio);
-                    height = Math.floor(height * ratio);
+    // Safe compression that always returns an image
+    compressImageSafe(dataUrl, callback) {
+        try {
+            const img = new Image();
+            
+            img.onload = () => {
+                try {
+                    // Create canvas and compress
+                    const canvas = document.createElement('canvas');
+                    const maxWidth = 1920;
+                    const maxHeight = 1080;
+                    let width = img.width;
+                    let height = img.height;
+                    
+                    // Resize if too large
+                    if (width > maxWidth || height > maxHeight) {
+                        const ratio = Math.min(maxWidth / width, maxHeight / height);
+                        width = Math.floor(width * ratio);
+                        height = Math.floor(height * ratio);
+                    }
+                    
+                    canvas.width = width;
+                    canvas.height = height;
+                    
+                    const ctx = canvas.getContext('2d');
+                    ctx.fillStyle = 'white';
+                    ctx.fillRect(0, 0, width, height);
+                    ctx.drawImage(img, 0, 0, width, height);
+                    
+                    // Get compressed image
+                    const compressedData = canvas.toDataURL('image/jpeg', 0.7);
+                    
+                    // Clean up
+                    img.src = '';
+                    canvas.width = 0;
+                    canvas.height = 0;
+                    
+                    callback(compressedData);
+                } catch (error) {
+                    console.warn('Compression failed, using original:', error);
+                    callback(dataUrl); // Fall back to original
                 }
-                
-                canvas.width = width;
-                canvas.height = height;
-                
-                const ctx = canvas.getContext('2d');
-                ctx.fillStyle = 'white';
-                ctx.fillRect(0, 0, width, height);
-                ctx.drawImage(img, 0, 0, width, height);
-                
-                // Get compressed image
-                const compressedData = canvas.toDataURL('image/jpeg', 0.7);
-                
-                // Clean up
-                img.src = '';
-                canvas.width = 0;
-                canvas.height = 0;
-                
-                callback(compressedData);
-            } catch (error) {
-                console.warn('Compression failed, using original:', error);
+            };
+            
+            img.onerror = () => {
+                console.warn('Image load failed, using original data URL');
                 callback(dataUrl); // Fall back to original
-            }
-        };
-        
-        img.onerror = () => {
-            console.warn('Image load failed, using original data URL');
-            callback(dataUrl); // Fall back to original
-        };
-        
-        img.src = dataUrl;
-        
-        // Timeout fallback
-        setTimeout(() => {
-            if (img.src) {
-                console.warn('Image compression timeout, using original');
-                callback(dataUrl);
-            }
-        }, 5000);
-        
-    } catch (error) {
-        console.error('Compression error:', error);
-        callback(dataUrl); // Always return something
-    }
-},
+            };
+            
+            img.src = dataUrl;
+            
+            // Timeout fallback
+            setTimeout(() => {
+                if (img.src) {
+                    console.warn('Image compression timeout, using original');
+                    callback(dataUrl);
+                }
+            }, 5000);
+            
+        } catch (error) {
+            console.error('Compression error:', error);
+            callback(dataUrl); // Always return something
+        }
+    },
 
-// Update photo preview
-updatePhotoPreview(imageData, captureBtn, originalText) {
-    const preview = document.getElementById('photo-preview');
-    if (!preview) {
-        // No preview element, just restore button
-        if (captureBtn) {
-            captureBtn.innerHTML = originalText;
-            captureBtn.disabled = false;
-        }
-        this.showStatus('Photo added successfully', 'success');
-        return;
-    }
-    
-    // Set the image source
-    preview.src = imageData;
-    preview.style.display = 'block';
-    preview.alt = 'Observation photo preview';
-    
-    // Handle image load
-    const handleLoad = () => {
-        // Update photo info
-        const photoInfo = document.getElementById('photo-info');
-        const photoSize = document.getElementById('photo-size');
-        const photoResolution = document.getElementById('photo-resolution');
-        const photoRemove = document.getElementById('photo-remove');
-        
-        if (photoSize && this.currentPhoto) {
-            const size = this.currentPhoto.metadata ? 
-                this.formatBytes(this.currentPhoto.metadata.compressedSize) : 
-                this.formatBytes(this.currentPhoto.data.length * 3/4);
-            
-            const ratio = this.currentPhoto.metadata ? 
-                ` (${this.currentPhoto.metadata.compressionRatio}% smaller)` : '';
-            
-            photoSize.innerHTML = `<i class="fas fa-weight-hanging" aria-hidden="true"></i> Size: ${size}${ratio}`;
-        }
-        if (photoResolution) {
-            const width = preview.naturalWidth || preview.width || 0;
-            const height = preview.naturalHeight || preview.height || 0;
-            photoResolution.innerHTML = `<i class="fas fa-expand-alt" aria-hidden="true"></i> Resolution: ${width}×${height}`;
-        }
-        if (photoInfo) {
-            photoInfo.style.display = 'block';
-        }
-        if (photoRemove) {
-            photoRemove.style.display = 'flex';
-        }
-        
-        // Restore button
-        if (captureBtn) {
-            captureBtn.innerHTML = originalText;
-            captureBtn.disabled = false;
-        }
-        
-        // Show success
-        this.showStatus('Photo added successfully', 'success');
-        
-        // Clean up event listeners
-        preview.removeEventListener('load', handleLoad);
-        preview.removeEventListener('error', handleError);
-    };
-    
-    const handleError = () => {
-        console.error('Preview image failed to load');
-        this.showStatus('Failed to load image preview', 'error');
-        this.removePhoto();
-        if (captureBtn) {
-            captureBtn.innerHTML = originalText;
-            captureBtn.disabled = false;
-        }
-        
-        // Clean up event listeners
-        preview.removeEventListener('load', handleLoad);
-        preview.removeEventListener('error', handleError);
-    };
-    
-    // Check if already loaded
-    if (preview.complete && preview.naturalWidth > 0) {
-        handleLoad();
-    } else {
-        // Wait for load or error
-        preview.addEventListener('load', handleLoad);
-        preview.addEventListener('error', handleError);
-        
-        // Timeout fallback
-        setTimeout(() => {
-            if (!preview.complete) {
-                console.warn('Image preview loading timeout');
-                preview.removeEventListener('load', handleLoad);
-                preview.removeEventListener('error', handleError);
-                handleLoad(); // Still try to proceed
+    // Update photo preview
+    updatePhotoPreview(imageData, captureBtn, originalText) {
+        const preview = document.getElementById('photo-preview');
+        if (!preview) {
+            // No preview element, just restore button
+            if (captureBtn) {
+                captureBtn.innerHTML = originalText;
+                captureBtn.disabled = false;
             }
-        }, 3000);
-    }
-},
+            this.showStatus('Photo added successfully', 'success');
+            return;
+        }
+        
+        // Set the image source
+        preview.src = imageData;
+        preview.style.display = 'block';
+        preview.alt = 'Observation photo preview';
+        
+        // Handle image load
+        const handleLoad = () => {
+            // Update photo info
+            const photoInfo = document.getElementById('photo-info');
+            const photoSize = document.getElementById('photo-size');
+            const photoResolution = document.getElementById('photo-resolution');
+            const photoRemove = document.getElementById('photo-remove');
+            
+            if (photoSize && this.currentPhoto) {
+                const size = this.currentPhoto.metadata ? 
+                    this.formatBytes(this.currentPhoto.metadata.compressedSize) : 
+                    this.formatBytes(this.currentPhoto.data.length * 3/4);
+                
+                const ratio = this.currentPhoto.metadata ? 
+                    ` (${this.currentPhoto.metadata.compressionRatio}% smaller)` : '';
+                
+                photoSize.innerHTML = `<i class="fas fa-weight-hanging" aria-hidden="true"></i> Size: ${size}${ratio}`;
+            }
+            if (photoResolution) {
+                const width = preview.naturalWidth || preview.width || 0;
+                const height = preview.naturalHeight || preview.height || 0;
+                photoResolution.innerHTML = `<i class="fas fa-expand-alt" aria-hidden="true"></i> Resolution: ${width}×${height}`;
+            }
+            if (photoInfo) {
+                photoInfo.style.display = 'block';
+            }
+            if (photoRemove) {
+                photoRemove.style.display = 'flex';
+            }
+            
+            // Restore button
+            if (captureBtn) {
+                captureBtn.innerHTML = originalText;
+                captureBtn.disabled = false;
+            }
+            
+            // Show success
+            this.showStatus('Photo added successfully', 'success');
+            
+            // Clean up event listeners
+            preview.removeEventListener('load', handleLoad);
+            preview.removeEventListener('error', handleError);
+        };
+        
+        const handleError = () => {
+            console.error('Preview image failed to load');
+            this.showStatus('Failed to load image preview', 'error');
+            this.removePhoto();
+            if (captureBtn) {
+                captureBtn.innerHTML = originalText;
+                captureBtn.disabled = false;
+            }
+            
+            // Clean up event listeners
+            preview.removeEventListener('load', handleLoad);
+            preview.removeEventListener('error', handleError);
+        };
+        
+        // Check if already loaded
+        if (preview.complete && preview.naturalWidth > 0) {
+            handleLoad();
+        } else {
+            // Wait for load or error
+            preview.addEventListener('load', handleLoad);
+            preview.addEventListener('error', handleError);
+            
+            // Timeout fallback
+            setTimeout(() => {
+                if (!preview.complete) {
+                    console.warn('Image preview loading timeout');
+                    preview.removeEventListener('load', handleLoad);
+                    preview.removeEventListener('error', handleError);
+                    handleLoad(); // Still try to proceed
+                }
+            }, 3000);
+        }
+    },
 
     // Compress image
     compressImage(dataUrl, callback, maxWidth = 1920, maxHeight = 1080, quality = 0.7) {
@@ -6632,7 +6739,7 @@ updatePhotoPreview(imageData, captureBtn, originalText) {
             
             img.src = photoData;
         });
-    }, // <-- THIS CLOSING BRACE AND COMMA WERE MISSING
+    },
 
     // Migrate existing observations to use compression
     async migrateExistingObservations() {
@@ -6693,7 +6800,7 @@ updatePhotoPreview(imageData, captureBtn, originalText) {
             mimeType: 'image/jpeg'
         });
     }
-}; // <-- This is the closing brace for the EcoLens object
+}; // End of EcoLens object
 
 // Initialize the app when DOM is loaded
 document.addEventListener('DOMContentLoaded', () => {
