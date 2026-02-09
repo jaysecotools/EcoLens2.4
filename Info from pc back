@@ -1,2142 +1,3 @@
-<!-- Working Version 2.2.6.5. DeepSeek JS replacement. Photo function repaired. Has Data Import issue. -->
-
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>EcoLens - Field Observation Tool</title>
-    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" 
-          integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" 
-          crossorigin="" />
-    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
-            integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo="
-            crossorigin=""></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-<style>
-    /* CSS Reset & Base Styles - Enhanced for cross-browser compatibility */
-    * {
-        margin: 0;
-        padding: 0;
-        box-sizing: border-box;
-        -webkit-tap-highlight-color: transparent;
-        -moz-tap-highlight-color: transparent;
-        -ms-tap-highlight-color: transparent;
-    }
-
-    /* Add focus styles for accessibility */
-    *:focus {
-        outline: 2px solid var(--primary);
-        outline-offset: 2px;
-    }
-
-    /* Improve focus styles for buttons */
-    .btn:focus {
-        outline: 2px solid var(--primary);
-        outline-offset: 2px;
-        box-shadow: 0 0 0 4px rgba(46, 139, 87, 0.2);
-    }
-
-    /* Add focus styles for form inputs */
-    .form-input:focus,
-    .form-select:focus,
-    .form-textarea:focus {
-        outline: 2px solid var(--primary);
-        outline-offset: 2px;
-    }
-
-    /* Light mode variables (default) */
-    :root {
-        --primary: #2e8b57;
-        --primary-dark: #1e6b47;
-        --primary-light: #e8f5e9;
-        --secondary: #3498db;
-        --secondary-dark: #2980b9;
-        --accent: #f39c12;
-        --dark: #2c3e50;
-        --dark-light: #34495e;
-        --light: #f8f9fa;
-        --light-gray: #ecf0f1;
-        --medium-gray: #bdc3c7;
-        --danger: #e74c3c;
-        --success: #27ae60;
-        --warning: #f39c12;
-        --info: #3498db;
-        --border-radius: 12px;
-        --border-radius-sm: 8px;
-        --border-radius-lg: 16px;
-        --shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
-        --shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.06);
-        --shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.12);
-        --transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
-        --transition-fast: all 0.2s ease;
-        
-        /* Light mode color variables */
-        --bg-primary: #f8f9fa;
-        --bg-secondary: white;
-        --text-primary: #333;
-        --text-secondary: #2c3e50;
-        --border-color: #ecf0f1;
-        --shadow-color: rgba(0, 0, 0, 0.08);
-    }
-
-    /* Dark mode variables */
-    body.dark-mode {
-        --bg-primary: #1a1a1a;
-        --bg-secondary: #2d2d2d;
-        --text-primary: #e0e0e0;
-        --text-secondary: #b0b0b0;
-        --border-color: #404040;
-        --shadow-color: rgba(0, 0, 0, 0.3);
-        --light: #2d2d2d;
-        --light-gray: #404040;
-        --medium-gray: #666;
-    }
-
-    /* High contrast mode support */
-    @media (prefers-contrast: high) {
-        :root {
-            --primary: #006400;
-            --secondary: #0000ff;
-            --danger: #8b0000;
-        }
-    }
-
-    body {
-        font-family: 'Segoe UI', system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
-        line-height: 1.6;
-        color: var(--text-primary);
-        background: var(--bg-primary);
-        max-width: 100vw;
-        min-height: 100vh;
-        overflow-x: hidden;
-        transition: background-color 0.3s ease, color 0.3s ease;
-        -webkit-font-smoothing: antialiased;
-        -moz-osx-font-smoothing: grayscale;
-    }
-
-    /* Skip link for accessibility */
-    .skip-link {
-        position: absolute;
-        top: -40px;
-        left: 0;
-        background: var(--primary);
-        color: white;
-        padding: 8px 16px;
-        text-decoration: none;
-        border-radius: var(--border-radius-sm);
-        z-index: 1001;
-    }
-
-    .skip-link:focus {
-        top: 10px;
-    }
-
-    /* Header & Navigation */
-    .header {
-        background: linear-gradient(135deg, var(--dark) 0%, var(--dark-light) 100%);
-        color: white;
-        padding: 1rem 1.5rem;
-        position: sticky;
-        top: 0;
-        z-index: 1000;
-        box-shadow: var(--shadow);
-        backdrop-filter: blur(10px);
-        background-color: rgba(44, 62, 80, 0.95);
-        -webkit-backdrop-filter: blur(10px);
-    }
-
-    .app-title-container {
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        gap: 12px;
-        margin-bottom: 1rem;
-    }
-
-    .app-icon {
-        font-size: 1.8rem;
-        color: var(--primary-light);
-        filter: drop-shadow(0 2px 4px rgba(0,0,0,0.2));
-    }
-
-    .app-title {
-        font-size: 1.8rem;
-        font-weight: 700;
-        text-align: center;
-        background: linear-gradient(90deg, #fff, var(--primary-light));
-        -webkit-background-clip: text;
-        -webkit-text-fill-color: transparent;
-        background-clip: text;
-        letter-spacing: -0.5px;
-    }
-
-    .app-subtitle {
-        font-size: 0.9rem;
-        text-align: center;
-        color: rgba(255, 255, 255, 0.8);
-        margin-top: -5px;
-        font-weight: 400;
-    }
-
-    .nav-tabs {
-        display: flex;
-        gap: 0.5rem;
-        justify-content: center;
-        background: rgba(0, 0, 0, 0.1);
-        padding: 0.5rem;
-        border-radius: var(--border-radius);
-        max-width: 600px;
-        margin: 0 auto;
-    }
-
-    .tab-btn {
-        padding: 0.7rem 1.5rem;
-        background: transparent;
-        border: none;
-        border-radius: var(--border-radius);
-        color: rgba(255, 255, 255, 0.8);
-        font-size: 0.95rem;
-        font-weight: 500;
-        cursor: pointer;
-        transition: var(--transition-fast);
-        flex: 1;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        gap: 8px;
-        position: relative;
-        overflow: hidden;
-    }
-
-    .tab-btn.active {
-        background: rgba(255, 255, 255, 0.15);
-        color: white;
-        font-weight: 600;
-        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
-    }
-
-    .tab-btn.active::after {
-        content: '';
-        position: absolute;
-        bottom: 0;
-        left: 50%;
-        transform: translateX(-50%);
-        width: 60%;
-        height: 3px;
-        background: var(--primary);
-        border-radius: 3px;
-    }
-
-    .tab-btn:hover:not(.active) {
-        background: rgba(255, 255, 255, 0.05);
-        color: white;
-        transform: translateY(-1px);
-    }
-
-    /* Main Content */
-    .main-content {
-        max-width: 900px;
-        margin: 0 auto;
-        padding: 1.5rem 1rem 3rem;
-    }
-
-    .tab-panel {
-        display: none;
-        animation: fadeIn 0.4s cubic-bezier(0.25, 0.8, 0.25, 1);
-    }
-
-    .tab-panel.active {
-        display: block;
-    }
-
-    @keyframes fadeIn {
-        from { opacity: 0; transform: translateY(15px); }
-        to { opacity: 1; transform: translateY(0); }
-    }
-
-    @keyframes slideIn {
-        from { opacity: 0; transform: translateX(-10px); }
-        to { opacity: 1; transform: translateX(0); }
-    }
-
-    /* Use My Location Styles */
-    #use-my-location .loading {
-        display: inline-block;
-        width: 16px;
-        height: 16px;
-        border: 2px solid rgba(255, 255, 255, 0.3);
-        border-top: 2px solid white;
-        border-radius: 50%;
-        animation: spin 1s linear infinite;
-        vertical-align: middle;
-        margin-right: 5px;
-    }
-
-    .btn:disabled {
-        opacity: 0.6;
-        cursor: not-allowed;
-    }
-
-    /* Form Styles */
-    .form-section {
-        background: var(--bg-secondary);
-        border-radius: var(--border-radius-lg);
-        padding: 2rem;
-        margin-bottom: 1.5rem;
-        box-shadow: var(--shadow);
-        border: 1px solid var(--border-color);
-        transition: var(--transition);
-    }
-
-    .form-section:hover {
-        box-shadow: var(--shadow-lg);
-    }
-
-    .form-title {
-        font-size: 1.4rem;
-        margin-bottom: 1.5rem;
-        color: var(--dark);
-        padding-bottom: 1rem;
-        border-bottom: 2px solid var(--light-gray);
-        display: flex;
-        align-items: center;
-        gap: 10px;
-        font-weight: 600;
-    }
-
-    body.dark-mode .form-title {
-        color: var(--text-primary);
-    }
-
-    .form-title i {
-        color: var(--primary);
-    }
-
-    .form-group {
-        margin-bottom: 1.8rem;
-        animation: slideIn 0.3s ease-out;
-    }
-
-    .form-label {
-        display: block;
-        font-weight: 600;
-        margin-bottom: 0.6rem;
-        color: var(--dark-light);
-        font-size: 0.95rem;
-        display: flex;
-        align-items: center;
-        gap: 5px;
-    }
-
-    body.dark-mode .form-label {
-        color: var(--text-primary);
-    }
-
-    .form-label.required::after {
-        content: " *";
-        color: var(--danger);
-    }
-
-    .form-input,
-    .form-select,
-    .form-textarea {
-        width: 100%;
-        padding: 0.9rem 1rem;
-        border: 2px solid var(--border-color);
-        border-radius: var(--border-radius-sm);
-        font-size: 1rem;
-        transition: var(--transition-fast);
-        background: var(--bg-secondary);
-        color: var(--text-primary);
-        font-family: inherit;
-    }
-
-    .form-input:focus,
-    .form-select:focus,
-    .form-textarea:focus {
-        outline: none;
-        border-color: var(--primary);
-        box-shadow: 0 0 0 3px rgba(46, 139, 87, 0.15);
-    }
-
-    .form-textarea {
-        min-height: 120px;
-        resize: vertical;
-        line-height: 1.5;
-    }
-
-    /* Improved form validation styles */
-    .form-input:invalid,
-    .form-select:invalid,
-    .form-textarea:invalid {
-        border-color: var(--danger);
-    }
-
-    .form-input:invalid:focus,
-    .form-select:invalid:focus,
-    .form-textarea:invalid:focus {
-        box-shadow: 0 0 0 3px rgba(231, 76, 60, 0.15);
-    }
-
-    .form-row {
-        display: flex;
-        gap: 1.5rem;
-        margin-bottom: 1.8rem;
-    }
-
-    .form-col {
-        flex: 1;
-    }
-
-    /* Map Container */
-    #map-container {
-        height: 320px;
-        margin-top: 1rem;
-        border-radius: var(--border-radius-sm);
-        overflow: hidden;
-        border: 2px solid var(--light-gray);
-        box-shadow: var(--shadow-sm);
-        display: none;
-        position: relative;
-    }
-
-    #map {
-        height: 100%;
-        width: 100%;
-    }
-
-    .map-controls {
-        display: flex;
-        gap: 0.75rem;
-        margin-top: 1rem;
-        flex-wrap: wrap;
-    }
-
-    /* Button Styles */
-    .btn {
-        padding: 0.85rem 1.75rem;
-        border: none;
-        border-radius: var(--border-radius);
-        font-size: 1rem;
-        font-weight: 600;
-        cursor: pointer;
-        transition: var(--transition);
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-        gap: 0.75rem;
-        position: relative;
-        overflow: hidden;
-        -webkit-user-select: none;
-        -moz-user-select: none;
-        -ms-user-select: none;
-        user-select: none;
-    }
-
-    .btn::after {
-        content: '';
-        position: absolute;
-        top: 50%;
-        left: 50%;
-        width: 5px;
-        height: 5px;
-        background: rgba(255, 255, 255, 0.5);
-        opacity: 0;
-        border-radius: 100%;
-        transform: scale(1, 1) translate(-50%);
-        transform-origin: 50% 50%;
-    }
-
-    .btn:focus:not(:active)::after {
-        animation: ripple 1s ease-out;
-    }
-
-    @keyframes ripple {
-        0% {
-            transform: scale(0, 0);
-            opacity: 0.5;
-        }
-        100% {
-            transform: scale(40, 40);
-            opacity: 0;
-        }
-    }
-
-    .btn-primary {
-        background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
-        color: white;
-        box-shadow: 0 4px 12px rgba(46, 139, 87, 0.25);
-    }
-
-    .btn-primary:hover {
-        background: linear-gradient(135deg, var(--primary-dark) 0%, #165a36 100%);
-        transform: translateY(-2px);
-        box-shadow: 0 6px 16px rgba(46, 139, 87, 0.35);
-    }
-
-    .btn-secondary {
-        background: linear-gradient(135deg, var(--secondary) 0%, var(--secondary-dark) 100%);
-        color: white;
-        box-shadow: 0 4px 12px rgba(52, 152, 219, 0.25);
-    }
-
-    .btn-secondary:hover {
-        background: linear-gradient(135deg, var(--secondary-dark) 0%, #21618c 100%);
-        transform: translateY(-2px);
-        box-shadow: 0 6px 16px rgba(52, 152, 219, 0.35);
-    }
-
-    .btn-outline {
-        background: var(--bg-secondary);
-        color: var(--primary);
-        border: 2px solid var(--primary);
-        box-shadow: 0 2px 6px rgba(0, 0, 0, 0.05);
-    }
-
-    body.dark-mode .btn-outline {
-        background: var(--bg-secondary);
-        color: var(--primary-light);
-        border-color: var(--primary);
-    }
-
-    .btn-outline:hover {
-        background: var(--primary-light);
-        color: var(--primary-dark);
-        transform: translateY(-2px);
-        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
-    }
-
-    body.dark-mode .btn-outline:hover {
-        background: var(--primary);
-        color: white;
-    }
-
-    .btn-danger {
-        background: linear-gradient(135deg, var(--danger) 0%, #c0392b 100%);
-        color: white;
-        box-shadow: 0 4px 12px rgba(231, 76, 60, 0.25);
-    }
-
-    .btn-danger:hover {
-        background: linear-gradient(135deg, #c0392b 0%, #a93226 100%);
-        transform: translateY(-2px);
-        box-shadow: 0 6px 16px rgba(231, 76, 60, 0.35);
-    }
-
-    .btn-small {
-        padding: 0.5rem 1rem;
-        font-size: 0.9rem;
-        border-radius: var(--border-radius-sm);
-    }
-
-    .btn-block {
-        width: 100%;
-        padding: 1rem;
-        font-size: 1.05rem;
-    }
-
-    .btn-group {
-        display: flex;
-        gap: 0.75rem;
-        margin-top: 1.5rem;
-        flex-wrap: wrap;
-    }
-
-    /* Photo Upload */
-    .photo-container {
-        margin-top: 1rem;
-    }
-
-    .photo-preview-container {
-        position: relative;
-        display: inline-block;
-        margin-top: 1rem;
-    }
-
-    .photo-preview {
-        max-width: 250px;
-        max-height: 250px;
-        border-radius: var(--border-radius);
-        border: 2px solid var(--light-gray);
-        display: none;
-        box-shadow: var(--shadow);
-        transition: var(--transition);
-        -webkit-user-drag: none;
-        -khtml-user-drag: none;
-        -moz-user-drag: none;
-        -o-user-drag: none;
-        user-drag: none;
-    }
-
-    .photo-preview:hover {
-        transform: scale(1.02);
-        box-shadow: var(--shadow-lg);
-    }
-
-    .photo-remove {
-        position: absolute;
-        top: -10px;
-        right: -10px;
-        background: var(--danger);
-        color: white;
-        border-radius: 50%;
-        width: 28px;
-        height: 28px;
-        display: none;
-        align-items: center;
-        justify-content: center;
-        cursor: pointer;
-        border: 2px solid var(--bg-secondary);
-        box-shadow: var(--shadow);
-        font-size: 0.9rem;
-        z-index: 10;
-    }
-
-    /* Checkbox/Radio Groups */
-    .checkbox-group,
-    .radio-group {
-        display: flex;
-        flex-wrap: wrap;
-        gap: 1rem;
-        margin-top: 0.75rem;
-    }
-
-    .checkbox-item,
-    .radio-item {
-        display: flex;
-        align-items: center;
-        gap: 0.6rem;
-        padding: 0.5rem 1rem;
-        background: var(--light);
-        border-radius: var(--border-radius-sm);
-        transition: var(--transition-fast);
-        cursor: pointer;
-    }
-
-    body.dark-mode .checkbox-item,
-    body.dark-mode .radio-item {
-        background: var(--light);
-        color: var(--text-primary);
-    }
-
-    .checkbox-item:hover,
-    .radio-item:hover {
-        background: var(--primary-light);
-        transform: translateY(-2px);
-    }
-
-    body.dark-mode .checkbox-item:hover,
-    body.dark-mode .radio-item:hover {
-        background: var(--primary);
-    }
-
-    .checkbox-item input[type="checkbox"],
-    .radio-item input[type="radio"] {
-        width: auto;
-        accent-color: var(--primary);
-    }
-
-    /* DateTime Input */
-    .datetime-inputs {
-        display: flex;
-        gap: 1rem;
-        align-items: flex-end;
-    }
-
-    .datetime-inputs input {
-        flex: 1;
-    }
-
-    .datetime-now-btn {
-        white-space: nowrap;
-        height: 100%;
-        padding: 0.9rem 1.5rem;
-    }
-
-    /* Logbook Styles */
-    .logbook-entries {
-        display: flex;
-        flex-direction: column;
-        gap: 1.2rem;
-    }
-
-    .log-entry {
-        background: var(--bg-secondary);
-        border-radius: var(--border-radius);
-        padding: 1.5rem;
-        box-shadow: var(--shadow-sm);
-        cursor: pointer;
-        transition: var(--transition);
-        border-left: 4px solid var(--primary);
-        position: relative;
-        overflow: hidden;
-    }
-
-    .log-entry:hover {
-        transform: translateY(-4px);
-        box-shadow: var(--shadow-lg);
-    }
-
-    .log-header {
-        display: flex;
-        justify-content: space-between;
-        align-items: flex-start;
-        margin-bottom: 0.75rem;
-        flex-wrap: wrap;
-        gap: 0.5rem;
-    }
-
-    .log-id {
-        font-family: 'Courier New', monospace;
-        color: var(--medium-gray);
-        font-size: 0.85rem;
-        background: var(--light);
-        padding: 0.25rem 0.75rem;
-        border-radius: 20px;
-        font-weight: 500;
-    }
-
-    .log-date {
-        color: var(--medium-gray);
-        font-size: 0.9rem;
-        display: flex;
-        align-items: center;
-        gap: 5px;
-    }
-
-    .log-species {
-        font-weight: 700;
-        font-size: 1.2rem;
-        color: var(--dark);
-        margin-bottom: 0.5rem;
-        display: flex;
-        align-items: center;
-        gap: 8px;
-    }
-
-    body.dark-mode .log-species {
-        color: var(--text-primary);
-    }
-
-    .log-species::before {
-        content: "🦋";
-        font-size: 1.1rem;
-    }
-
-    .log-location {
-        color: var(--dark-light);
-        font-size: 0.95rem;
-        display: flex;
-        align-items: center;
-        gap: 6px;
-        margin-bottom: 0.5rem;
-    }
-
-    .log-location::before {
-        content: "📍";
-        font-size: 0.9rem;
-    }
-
-    .log-details {
-        margin-top: 1.2rem;
-        padding-top: 1.2rem;
-        border-top: 1px solid var(--light-gray);
-        display: none;
-        animation: fadeIn 0.3s ease;
-    }
-
-    .log-details.show {
-        display: block;
-    }
-
-    .log-actions {
-        display: flex;
-        gap: 0.75rem;
-        margin-top: 1.2rem;
-    }
-
-    /* Export Panel */
-    .export-options {
-        background: var(--bg-secondary);
-        border-radius: var(--border-radius);
-        padding: 1.8rem;
-        margin-bottom: 1.5rem;
-        box-shadow: var(--shadow);
-    }
-
-    .export-option-group {
-        margin-bottom: 2rem;
-    }
-
-    .export-option {
-        display: flex;
-        align-items: center;
-        gap: 0.75rem;
-        margin-bottom: 0.75rem;
-        padding: 0.75rem 1rem;
-        background: var(--light);
-        border-radius: var(--border-radius-sm);
-        transition: var(--transition-fast);
-    }
-
-    body.dark-mode .export-option {
-        background: var(--light);
-        color: var(--text-primary);
-    }
-
-    .export-option:hover {
-        background: var(--primary-light);
-    }
-
-    .export-option input[type="radio"] {
-        width: auto;
-        accent-color: var(--primary);
-    }
-
-    .date-range {
-        display: flex;
-        gap: 1.5rem;
-        margin-top: 1rem;
-    }
-
-    .date-input {
-        flex: 1;
-    }
-
-    /* Import Section */
-    .import-section {
-        background: var(--bg-secondary);
-        border-radius: var(--border-radius);
-        padding: 1.8rem;
-        margin-bottom: 1.5rem;
-        border: 2px dashed var(--secondary);
-        background: linear-gradient(135deg, var(--light) 0%, var(--light-gray) 100%);
-        box-shadow: var(--shadow);
-    }
-
-    body.dark-mode .import-section {
-        background: linear-gradient(135deg, var(--light) 0%, var(--dark-light) 100%);
-    }
-
-    .import-options {
-        margin-top: 1rem;
-    }
-
-    .import-note {
-        font-size: 0.9rem;
-        color: var(--dark-light);
-        margin-top: 1rem;
-        padding: 1rem;
-        background: var(--light);
-        border-radius: var(--border-radius-sm);
-        border-left: 4px solid var(--secondary);
-        line-height: 1.5;
-    }
-
-    body.dark-mode .import-note {
-        background: var(--light);
-        color: var(--text-primary);
-    }
-
-    /* Import Mode Selection */
-    .import-mode {
-        display: flex;
-        gap: 1.5rem;
-        margin-top: 1.2rem;
-        flex-wrap: wrap;
-    }
-
-    .import-mode-option {
-        flex: 1;
-        min-width: 200px;
-    }
-
-    /* CSV Preview & Validation */
-    .csv-preview-section {
-        margin-top: 1.5rem;
-        display: none;
-        animation: fadeIn 0.4s ease;
-    }
-
-    .csv-preview-table {
-        width: 100%;
-        border-collapse: collapse;
-        margin: 1rem 0;
-        font-size: 0.9rem;
-        box-shadow: var(--shadow-sm);
-        border-radius: var(--border-radius-sm);
-        overflow: hidden;
-    }
-
-    .csv-preview-table th,
-    .csv-preview-table td {
-        padding: 0.75rem;
-        border: 1px solid var(--light-gray);
-        text-align: left;
-    }
-
-    .csv-preview-table th {
-        background: linear-gradient(135deg, var(--dark) 0%, var(--dark-light) 100%);
-        color: white;
-        font-weight: 600;
-        position: sticky;
-        top: 0;
-    }
-
-    .csv-preview-table .error-row {
-        background-color: #f8d7da;
-    }
-
-    .csv-preview-table .warning-row {
-        background-color: #fff3cd;
-    }
-
-    .validation-summary {
-        padding: 1.2rem;
-        border-radius: var(--border-radius);
-        margin: 1rem 0;
-    }
-
-    .validation-errors {
-        margin-top: 0.75rem;
-    }
-
-    .validation-error {
-        padding: 0.75rem;
-        background: #f8d7da;
-        border-radius: var(--border-radius-sm);
-        margin-bottom: 0.5rem;
-        font-size: 0.9rem;
-        border-left: 4px solid var(--danger);
-    }
-
-    .validation-warning {
-        padding: 0.75rem;
-        background: #fff3cd;
-        border-radius: var(--border-radius-sm);
-        margin-bottom: 0.5rem;
-        font-size: 0.9rem;
-        border-left: 4px solid var(--warning);
-    }
-
-    .validation-stats {
-        display: flex;
-        gap: 1.5rem;
-        margin: 1.5rem 0;
-        flex-wrap: wrap;
-    }
-
-    .stat-item {
-        padding: 0.75rem 1.25rem;
-        border-radius: var(--border-radius);
-        font-weight: 600;
-        display: flex;
-        align-items: center;
-        gap: 8px;
-        box-shadow: var(--shadow-sm);
-    }
-
-    .stat-valid {
-        background: #d5edda;
-        color: #155724;
-    }
-
-    .stat-invalid {
-        background: #f8d7da;
-        color: #721c24;
-    }
-
-    .stat-warning {
-        background: #fff3cd;
-        color: #856404;
-    }
-
-    .stat-info {
-        background: #d1ecf1;
-        color: #0c5460;
-    }
-
-    /* Status Messages */
-    .status-message {
-        padding: 1.2rem;
-        border-radius: var(--border-radius);
-        margin: 1.5rem 0;
-        text-align: center;
-        font-weight: 500;
-        animation: fadeIn 0.3s ease;
-        box-shadow: var(--shadow-sm);
-    }
-
-    .status-success {
-        background: #d5edda;
-        color: #155724;
-        border: 1px solid #c3e6cb;
-        border-left: 4px solid var(--success);
-    }
-
-    .status-error {
-        background: #f8d7da;
-        color: #721c24;
-        border: 1px solid #f5c6cb;
-        border-left: 4px solid var(--danger);
-    }
-
-    .status-info {
-        background: #d1ecf1;
-        color: #0c5460;
-        border: 1px solid #bee5eb;
-        border-left: 4px solid var(--info);
-    }
-
-    .status-warning {
-        background: #fff3cd;
-        color: #856404;
-        border: 1px solid #ffeaa7;
-        border-left: 4px solid var(--warning);
-    }
-
-    body.dark-mode .status-message {
-        background: var(--bg-secondary);
-    }
-
-    /* Loading Indicator */
-    .loading {
-        display: inline-block;
-        width: 20px;
-        height: 20px;
-        border: 2px solid #f3f3f3;
-        border-top: 2px solid var(--primary);
-        border-radius: 50%;
-        animation: spin 1s linear infinite;
-    }
-
-    @keyframes spin {
-        0% { transform: rotate(0deg); }
-        100% { transform: rotate(360deg); }
-    }
-
-    /* PDF Generation Status */
-    .pdf-status {
-        background: #e8f4fc;
-        border: 1px solid #b6e0fe;
-        border-radius: var(--border-radius);
-        padding: 1.5rem;
-        margin: 1.5rem 0;
-        display: none;
-        box-shadow: var(--shadow-sm);
-    }
-
-    .pdf-status progress {
-        width: 100%;
-        height: 12px;
-        margin: 0.75rem 0;
-        border-radius: 6px;
-        overflow: hidden;
-        -webkit-appearance: none;
-        appearance: none;
-    }
-
-    .pdf-status progress::-webkit-progress-bar {
-        background-color: #f0f0f0;
-        border-radius: 6px;
-    }
-
-    .pdf-status progress::-webkit-progress-value {
-        background: linear-gradient(90deg, var(--primary), var(--secondary));
-        border-radius: 6px;
-    }
-
-    .pdf-status progress::-moz-progress-bar {
-        background: linear-gradient(90deg, var(--primary), var(--secondary));
-        border-radius: 6px;
-    }
-
-    /* Tooltip */
-    .tooltip {
-        position: relative;
-        display: inline-block;
-    }
-
-    .tooltip .tooltip-text {
-        visibility: hidden;
-        width: 220px;
-        background-color: var(--dark);
-        color: white;
-        text-align: center;
-        border-radius: var(--border-radius-sm);
-        padding: 0.75rem;
-        position: absolute;
-        z-index: 100;
-        bottom: 125%;
-        left: 50%;
-        margin-left: -110px;
-        opacity: 0;
-        transition: opacity 0.3s;
-        font-size: 0.85rem;
-        font-weight: normal;
-        box-shadow: var(--shadow);
-    }
-
-    .tooltip:hover .tooltip-text {
-        visibility: visible;
-        opacity: 1;
-    }
-
-    /* Batch Selection */
-    .batch-selection {
-        margin: 1.5rem 0;
-        padding: 1.5rem;
-        background: var(--light);
-        border-radius: var(--border-radius);
-        box-shadow: var(--shadow-sm);
-    }
-
-    .batch-checkboxes {
-        max-height: 250px;
-        overflow-y: auto;
-        margin: 1rem 0;
-        padding: 1rem;
-        background: var(--bg-secondary);
-        border: 1px solid var(--light-gray);
-        border-radius: var(--border-radius-sm);
-        box-shadow: inset 0 2px 4px rgba(0,0,0,0.05);
-    }
-
-    .batch-checkbox-item {
-        display: flex;
-        align-items: center;
-        gap: 0.75rem;
-        padding: 0.5rem 0;
-        transition: var(--transition-fast);
-    }
-
-    .batch-checkbox-item:hover {
-        background: var(--primary-light);
-        padding-left: 0.5rem;
-        border-radius: 4px;
-    }
-
-    /* Mini Map Preview */
-    .mini-map-preview {
-        height: 180px;
-        width: 100%;
-        border-radius: var(--border-radius-sm);
-        margin: 0.75rem 0;
-        border: 2px solid var(--light-gray);
-        box-shadow: var(--shadow-sm);
-    }
-
-    .coordinate-validation {
-        font-size: 0.85rem;
-        margin-top: 0.5rem;
-        display: flex;
-        align-items: center;
-        gap: 5px;
-    }
-
-    .coordinate-valid {
-        color: var(--success);
-    }
-
-    .coordinate-invalid {
-        color: var(--danger);
-    }
-
-    /* Empty States */
-    .empty-state {
-        text-align: center;
-        padding: 3rem 1rem;
-        color: var(--medium-gray);
-    }
-
-    .empty-state i {
-        font-size: 3rem;
-        margin-bottom: 1rem;
-        color: var(--light-gray);
-    }
-
-    body.dark-mode .empty-state i {
-        color: var(--medium-gray);
-    }
-
-    /* Card Enhancements */
-    .card {
-        background: var(--bg-secondary);
-        border-radius: var(--border-radius);
-        padding: 1.5rem;
-        box-shadow: var(--shadow);
-        margin-bottom: 1.5rem;
-        transition: var(--transition);
-        border: 1px solid var(--border-color);
-    }
-
-    .card:hover {
-        box-shadow: var(--shadow-lg);
-    }
-
-    /* Mobile Optimizations */
-    @media (max-width: 768px) {
-        .main-content {
-            padding: 1rem 0.75rem 2rem;
-        }
-        
-        .form-section {
-            padding: 1.5rem 1rem;
-        }
-        
-        .header {
-            padding: 0.75rem 1rem;
-        }
-        
-        .app-title {
-            font-size: 1.5rem;
-        }
-        
-        .app-subtitle {
-            font-size: 0.8rem;
-        }
-        
-        .tab-btn {
-            padding: 0.6rem;
-            font-size: 0.85rem;
-        }
-        
-        .tab-btn i {
-            font-size: 1rem;
-        }
-        
-        .form-row {
-            flex-direction: column;
-            gap: 1rem;
-        }
-        
-        .datetime-inputs {
-            flex-direction: column;
-            gap: 0.75rem;
-            align-items: stretch;
-        }
-        
-        .datetime-inputs input {
-            width: 100%;
-        }
-        
-        .datetime-now-btn {
-            align-self: flex-start;
-            width: auto;
-        }
-        
-        .date-range {
-            flex-direction: column;
-            gap: 0.75rem;
-        }
-        
-        .log-actions {
-            flex-direction: column;
-        }
-        
-        .map-controls {
-            flex-direction: column;
-        }
-        
-        .btn {
-            padding: 0.75rem 1.25rem;
-        }
-        
-        .btn-block {
-            padding: 0.9rem;
-        }
-        
-        .btn-group {
-            flex-direction: column;
-        }
-        
-        .import-mode {
-            flex-direction: column;
-        }
-        
-        .import-mode-option {
-            min-width: 100%;
-        }
-        
-        .validation-stats {
-            flex-direction: column;
-            gap: 0.75rem;
-        }
-        
-        .form-title {
-            font-size: 1.2rem;
-        }
-        
-        #map-container {
-            height: 250px;
-        }
-        
-        .photo-preview {
-            max-width: 100%;
-        }
-    }
-
-    @media (max-width: 480px) {
-        .nav-tabs {
-            flex-direction: column;
-        }
-        
-        .tab-btn {
-            justify-content: flex-start;
-            padding-left: 1rem;
-        }
-        
-        .checkbox-group,
-        .radio-group {
-            flex-direction: column;
-            gap: 0.5rem;
-        }
-        
-        .checkbox-item,
-        .radio-item {
-            width: 100%;
-        }
-    }
-
-/* Ensure photo remove button is always clickable */
-.photo-preview-container:hover .photo-remove {
-    display: flex !important;
-}
-
-/* Make photo container more responsive */
-.photo-container {
-    position: relative;
-    min-height: 100px;
-}
-
-.photo-preview {
-    cursor: pointer;
-    transition: all 0.3s ease;
-}
-
-.photo-preview:hover {
-    transform: scale(1.03);
-    box-shadow: 0 8px 25px rgba(0,0,0,0.2);
-}
-
-/* Ensure remove button is accessible */
-.photo-remove:focus {
-    outline: 2px solid var(--danger);
-    outline-offset: 2px;
-}
-
-/* Improve photo info display */
-#photo-info {
-    background: var(--light);
-    padding: 0.5rem;
-    border-radius: var(--border-radius-sm);
-    border: 1px solid var(--border-color);
-    margin-top: 0.5rem;
-    font-size: 0.85rem;
-}
-
-#photo-info span {
-    display: inline-block;
-    margin-right: 1rem;
-}
-
-#photo-info i {
-    margin-right: 0.25rem;
-    opacity: 0.7;
-}
-
-    /* Print Styles */
-    @media print {
-        .header,
-        .tab-panel:not(.active),
-        .btn,
-        .map-controls,
-        .photo-remove,
-        .dark-mode-btn,
-        .fab {
-            display: none !important;
-        }
-        
-        .form-section,
-        .log-entry,
-        .export-options {
-            box-shadow: none;
-            border: 1px solid #ddd;
-            break-inside: avoid;
-        }
-        
-        body {
-            background: white;
-        }
-        
-        .main-content {
-            max-width: 100%;
-            padding: 0;
-        }
-        
-        * {
-            -webkit-print-color-adjust: exact;
-            print-color-adjust: exact;
-            color-adjust: exact;
-        }
-    }
-
-    /* Custom Scrollbar - Enhanced for Firefox */
-    * {
-        scrollbar-width: thin;
-        scrollbar-color: var(--primary) #f1f1f1;
-    }
-
-    ::-webkit-scrollbar {
-        width: 8px;
-        height: 8px;
-    }
-
-    ::-webkit-scrollbar-track {
-        background: #f1f1f1;
-        border-radius: 10px;
-    }
-
-    ::-webkit-scrollbar-thumb {
-        background: var(--primary);
-        border-radius: 10px;
-    }
-
-    ::-webkit-scrollbar-thumb:hover {
-        background: var(--primary-dark);
-    }
-
-    body.dark-mode ::-webkit-scrollbar-track {
-        background: var(--light-gray);
-    }
-    
-    body.dark-mode ::-webkit-scrollbar-thumb {
-        background: var(--primary);
-    }
-
-    /* Floating Action Button for Mobile */
-    .fab {
-        position: fixed;
-        bottom: 2rem;
-        right: 2rem;
-        width: 60px;
-        height: 60px;
-        background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
-        color: white;
-        border-radius: 50%;
-        display: none;
-        align-items: center;
-        justify-content: center;
-        font-size: 1.5rem;
-        box-shadow: var(--shadow-lg);
-        z-index: 100;
-        cursor: pointer;
-        transition: var(--transition);
-        border: none;
-        -webkit-tap-highlight-color: transparent;
-    }
-
-    .fab:hover {
-        transform: scale(1.1);
-    }
-
-    @media (max-width: 768px) {
-        .fab {
-            display: flex;
-        }
-    }
-
-    /* Divider */
-    .divider {
-        height: 1px;
-        background: linear-gradient(90deg, transparent, var(--light-gray), transparent);
-        margin: 1.5rem 0;
-        border: none;
-    }
-
-    /* Badge */
-    .badge {
-        display: inline-block;
-        padding: 0.25rem 0.75rem;
-        font-size: 0.75rem;
-        font-weight: 600;
-        border-radius: 20px;
-        background: var(--primary-light);
-        color: var(--primary-dark);
-    }
-
-    /* Animation for new entries */
-    @keyframes highlight {
-        0% { background-color: rgba(46, 139, 87, 0.3); }
-        100% { background-color: var(--bg-secondary); }
-    }
-
-    .new-entry {
-        animation: highlight 2s ease;
-    }
-
-    /* Dark Mode Toggle Button */
-    .dark-mode-btn {
-        position: absolute;
-        top: 1rem;
-        right: 1rem;
-        background: transparent;
-        border: 2px solid rgba(255, 255, 255, 0.3);
-        color: white;
-        width: 40px;
-        height: 40px;
-        border-radius: 50%;
-        cursor: pointer;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        font-size: 1.2rem;
-        transition: var(--transition);
-        z-index: 1001;
-        -webkit-tap-highlight-color: transparent;
-    }
-    
-    .dark-mode-btn:hover {
-        background: rgba(255, 255, 255, 0.1);
-        transform: rotate(30deg);
-    }
-    
-    body.dark-mode .dark-mode-btn {
-        border-color: rgba(255, 255, 255, 0.3);
-        color: var(--accent);
-    }
-    
-    body.dark-mode .dark-mode-btn:hover {
-        background: rgba(255, 255, 255, 0.1);
-    }
-    
-    /* Tab buttons dark mode */
-    body.dark-mode .tab-btn {
-        color: rgba(255, 255, 255, 0.9);
-    }
-    
-    body.dark-mode .tab-btn.active {
-        background: rgba(255, 255, 255, 0.2);
-    }
-    
-    body.dark-mode .tab-btn:hover:not(.active) {
-        background: rgba(255, 255, 255, 0.1);
-    }
-    
-    /* Update map controls for dark mode */
-    .leaflet-container {
-        background: var(--bg-secondary) !important;
-    }
-    
-    body.dark-mode .leaflet-tile {
-        filter: invert(1) hue-rotate(180deg) brightness(0.95) contrast(0.9);
-    }
-    
-    body.dark-mode .leaflet-control {
-        background-color: var(--bg-secondary) !important;
-        border-color: var(--border-color) !important;
-    }
-    
-    body.dark-mode .leaflet-control a {
-        background-color: var(--bg-secondary) !important;
-        color: var(--text-primary) !important;
-        border-color: var(--border-color) !important;
-    }
-    
-    body.dark-mode .leaflet-popup-content-wrapper {
-        background-color: var(--bg-secondary) !important;
-        color: var(--text-primary) !important;
-    }
-    
-    body.dark-mode .leaflet-popup-tip {
-        background-color: var(--bg-secondary) !important;
-    }
-
-    /* Screen reader only class */
-    .sr-only {
-        position: absolute;
-        width: 1px;
-        height: 1px;
-        padding: 0;
-        margin: -1px;
-        overflow: hidden;
-        clip: rect(0, 0, 0, 0);
-        white-space: nowrap;
-        border: 0;
-    }
-
-    /* Focus visible polyfill for better accessibility */
-    .js-focus-visible :focus:not(.focus-visible) {
-        outline: none;
-    }
-
-    /* Reduced motion support */
-    @media (prefers-reduced-motion: reduce) {
-        *,
-        *::before,
-        *::after {
-            animation-duration: 0.01ms !important;
-            animation-iteration-count: 1 !important;
-            transition-duration: 0.01ms !important;
-            scroll-behavior: auto !important;
-        }
-    }
-
-    /* Improved fieldset and legend for accessibility */
-    fieldset {
-        border: 1px solid var(--border-color);
-        border-radius: var(--border-radius-sm);
-        padding: 1rem;
-        margin-bottom: 1.5rem;
-    }
-
-    legend {
-        font-weight: 600;
-        padding: 0 0.5rem;
-        color: var(--dark);
-    }
-
-    body.dark-mode legend {
-        color: var(--text-primary);
-    }
-
-/* Fix photo remove button z-index */
-.photo-remove {
-    z-index: 1000 !important;
-    pointer-events: auto !important;
-}
-</style>
-</head>
-<body>
-    <!-- Skip link for keyboard users -->
-    <a href="#main-content" class="skip-link">Skip to main content</a>
-
-    <div class="header">
-        <div class="app-title-container">
-            <div class="app-icon" aria-hidden="true">🔬</div>
-            <div>
-                <h1 class="app-title">EcoLens</h1>
-                <div class="app-subtitle">Field Observation & Data Collection Tool</div>
-            </div>
-        </div>
-
-        <button id="dark-mode-toggle" class="dark-mode-btn" title="Toggle dark mode" aria-label="Toggle dark mode">
-            <i class="fas fa-moon" aria-hidden="true"></i>
-        </button>
-
-        <div class="nav-tabs" role="tablist">
-            <button class="tab-btn active" data-tab="record" role="tab" aria-selected="true" aria-controls="record-panel" id="tab-record">
-                <i class="fas fa-plus-circle" aria-hidden="true"></i> Record
-            </button>
-            <button class="tab-btn" data-tab="logbook" role="tab" aria-selected="false" aria-controls="logbook-panel" id="tab-logbook">
-                <i class="fas fa-book" aria-hidden="true"></i> Logbook
-            </button>
-            <button class="tab-btn" data-tab="export" role="tab" aria-selected="false" aria-controls="export-panel" id="tab-export">
-                <i class="fas fa-file-export" aria-hidden="true"></i> Export
-            </button>
-        </div>
-    </div>
-
-    <div class="main-content" id="main-content">
-        <!-- Record Panel -->
-        <div id="record-panel" class="tab-panel active" role="tabpanel" aria-labelledby="tab-record" tabindex="0">
-            <div class="form-section">
-                <h2 class="form-title">
-                    <i class="fas fa-feather-alt" aria-hidden="true"></i> New Field Observation
-                </h2>
-                
-                <!-- Date & Time -->
-                <div class="form-group">
-                    <label class="form-label required" for="observation-date">
-                        <i class="far fa-calendar-alt" aria-hidden="true"></i> Observation Date & Time
-                    </label>
-                    <div class="datetime-inputs">
-                        <div class="form-col">
-                            <input type="date" id="observation-date" class="form-input" required 
-                                   aria-label="Observation date" aria-required="true">
-                        </div>
-                        <div class="form-col">
-                            <input type="time" id="observation-time" class="form-input" required 
-                                   aria-label="Observation time" aria-required="true">
-                        </div>
-                        <button type="button" id="set-now" class="btn btn-outline datetime-now-btn" aria-label="Set to current time">
-                            <i class="far fa-clock" aria-hidden="true"></i> Now
-                        </button>
-                    </div>
-                </div>
-
-                <!-- Observer Name -->
-                <div class="form-group">
-                    <label class="form-label required" for="observer-name">
-                        <i class="fas fa-user" aria-hidden="true"></i> Observer Name
-                    </label>
-                    <input type="text" id="observer-name" class="form-input" 
-                           placeholder="Enter observer's full name" required 
-                           aria-label="Observer name" aria-required="true"
-                           autocomplete="name">
-                </div>
-
-                <!-- Species Information -->
-                <div class="form-row">
-                    <div class="form-col">
-                        <label class="form-label required" for="scientific-name">
-                            <i class="fas fa-dna" aria-hidden="true"></i> Scientific Name
-                        </label>
-                        <input type="text" id="scientific-name" class="form-input" 
-                               placeholder="Genus species" required 
-                               aria-label="Scientific name" aria-required="true">
-                    </div>
-                    <div class="form-col">
-                        <label class="form-label" for="common-name">
-                            <i class="fas fa-tag" aria-hidden="true"></i> Common Name
-                        </label>
-                        <input type="text" id="common-name" class="form-input" 
-                               placeholder="Local/common name" aria-label="Common name">
-                    </div>
-                </div>
-
-                <!-- Location -->
-                <div class="form-group">
-                    <label class="form-label required" for="location">
-                        <i class="fas fa-map-marker-alt" aria-hidden="true"></i> Location
-                    </label>
-                    <input type="text" id="location" class="form-input" 
-                           placeholder="Describe the location or address" required 
-                           aria-label="Location description" aria-required="true">
-                    <div class="map-controls">
-                        <button type="button" id="toggle-map" class="btn btn-outline" aria-label="Toggle map display">
-                            <i class="fas fa-map" aria-hidden="true"></i> <span id="map-toggle-text">Show Map</span>
-                        </button>
-                        <button type="button" id="use-my-location" class="btn btn-outline" aria-label="Use current location">
-                            <i class="fas fa-location-arrow" aria-hidden="true"></i> Use My Location
-                        </button>
-                    </div>
-                    <div id="map-container">
-                        <div id="map" aria-label="Map for selecting location"></div>
-                    </div>
-                    <div id="location-status" class="status-message" style="display: none; margin-top: 0.5rem;"></div>
-                </div>
-
-                <!-- Habitat & Observation Type -->
-                <div class="form-row">
-                    <div class="form-col">
-                        <label class="form-label required" for="habitat">
-                            <i class="fas fa-tree" aria-hidden="true"></i> Habitat Type
-                        </label>
-                        <select id="habitat" class="form-select" required 
-                                aria-label="Habitat type" aria-required="true">
-                            <option value="">Select habitat type</option>
-                            <option value="forest">🌳 Forest</option>
-                            <option value="wetland">💧 Wetland</option>
-                            <option value="grassland">🌾 Grassland</option>
-                            <option value="coastal">🏖️ Coastal</option>
-                            <option value="urban">🏙️ Urban</option>
-                            <option value="agricultural">🚜 Agricultural</option>
-                            <option value="alpine">⛰️ Alpine</option>
-                            <option value="riverine">🌊 Riverine</option>
-                            <option value="desert">🏜️ Desert</option>
-                            <option value="other">🔍 Other</option>
-                        </select>
-                    </div>
-                    <div class="form-col">
-                        <label class="form-label required" for="observation-type">
-                            <i class="fas fa-binoculars" aria-hidden="true"></i> Observation Type
-                        </label>
-                        <select id="observation-type" class="form-select" required 
-                                aria-label="Observation type" aria-required="true">
-                            <option value="">Select type</option>
-                            <option value="direct">👁️ Direct sighting</option>
-                            <option value="scat">💩 Scat/droppings</option>
-                            <option value="track">👣 Track/footprint</option>
-                            <option value="call">🎵 Call/sound</option>
-                            <option value="nest">🏠 Nest/den</option>
-                            <option value="roadkill">🚗 Roadkill</option>
-                            <option value="feather">🪶 Feather</option>
-                            <option value="bone">💀 Bone/skull</option>
-                            <option value="other">🔍 Other evidence</option>
-                        </select>
-                    </div>
-                </div>
-
-                <!-- Characteristics -->
-                <div class="form-group">
-                    <label class="form-label" for="characteristics">
-                        <i class="fas fa-clipboard-list" aria-hidden="true"></i> Description / Characteristics
-                    </label>
-                    <textarea id="characteristics" class="form-textarea" 
-                              placeholder="Describe size, color, markings, behavior, age, sex, weather conditions, etc."
-                              aria-label="Characteristics description"></textarea>
-                </div>
-
-                <!-- Notes -->
-                <div class="form-group">
-                    <label class="form-label" for="notes">
-                        <i class="fas fa-sticky-note" aria-hidden="true"></i> Additional Notes
-                    </label>
-                    <textarea id="notes" class="form-textarea" 
-                              placeholder="Any other relevant observations or comments"
-                              aria-label="Additional notes"></textarea>
-                </div>
-
-                <!-- Equipment Used -->
-                <fieldset class="form-group" aria-labelledby="equipment-legend">
-                    <legend id="equipment-legend" class="form-label">
-                        <i class="fas fa-tools" aria-hidden="true"></i> Equipment Used
-                    </legend>
-                    <div class="checkbox-group" role="group" aria-labelledby="equipment-legend">
-                        <label class="checkbox-item">
-                            <input type="checkbox" name="equipment" value="binoculars" aria-label="Binoculars">
-                            <i class="fas fa-eye" aria-hidden="true"></i> Binoculars
-                        </label>
-                        <label class="checkbox-item">
-                            <input type="checkbox" name="equipment" value="camera" aria-label="Camera">
-                            <i class="fas fa-camera" aria-hidden="true"></i> Camera
-                        </label>
-                        <label class="checkbox-item">
-                            <input type="checkbox" name="equipment" value="hand-lens" aria-label="Hand lens">
-                            <i class="fas fa-search" aria-hidden="true"></i> Hand lens
-                        </label>
-                        <label class="checkbox-item">
-                            <input type="checkbox" name="equipment" value="gps" aria-label="GPS">
-                            <i class="fas fa-map-pin" aria-hidden="true"></i> GPS
-                        </label>
-                        <label class="checkbox-item">
-                            <input type="checkbox" name="equipment" value="microscope" aria-label="Microscope">
-                            <i class="fas fa-microscope" aria-hidden="true"></i> Microscope
-                        </label>
-                        <label class="checkbox-item">
-                            <input type="checkbox" name="equipment" value="other-equipment" aria-label="Other equipment">
-                            <i class="fas fa-plus" aria-hidden="true"></i> Other
-                        </label>
-                    </div>
-                    <input type="text" id="other-equipment" class="form-input" 
-                           placeholder="Specify other equipment used" style="margin-top: 0.75rem; display: none;"
-                           aria-label="Other equipment details">
-                </fieldset>
-
-                <!-- Reference Material -->
-                <div class="form-group">
-                    <label class="form-label" for="references">
-                        <i class="fas fa-book-open" aria-hidden="true"></i> Reference Material Used
-                    </label>
-                    <textarea id="references" class="form-textarea" 
-                              placeholder="Field guides, apps, websites, or other references consulted"
-                              aria-label="Reference material used"></textarea>
-                </div>
-
-                <!-- Photo -->
-                <div class="form-group">
-                    <label class="form-label">
-                        <i class="fas fa-camera" aria-hidden="true"></i> Photo / Evidence
-                    </label>
-                    <button type="button" id="capture-photo" class="btn btn-outline" aria-label="Take or upload photo">
-                        <i class="fas fa-camera-retro" aria-hidden="true"></i> Take photo/Upload
-                    </button>
-                    <input type="file" id="photo-upload" accept="image/*" capture="environment" 
-                           style="display: none;" aria-label="Photo upload">
-                    <div class="photo-container">
-                        <div class="photo-preview-container">
-                            <img id="photo-preview" class="photo-preview" alt="Photo preview" role="presentation">
-                            <div id="photo-remove" class="photo-remove" title="Remove photo" aria-label="Remove photo">
-                                <i class="fas fa-times" aria-hidden="true"></i>
-                            </div>
-                        </div>
-                        <div id="photo-info" style="margin-top: 0.75rem; font-size: 0.9rem; color: #666; display: none;">
-                            <span id="photo-size"><i class="fas fa-weight-hanging" aria-hidden="true"></i> Size: --</span> | 
-                            <span id="photo-resolution"><i class="fas fa-expand-alt" aria-hidden="true"></i> Resolution: --</span>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Submit Button -->
-                <button id="record-btn" class="btn btn-primary btn-block" aria-label="Record observation">
-                    <i class="fas fa-save" aria-hidden="true"></i> Record Observation
-                </button>
-            </div>
-
-            <div id="record-status" class="status-message" style="display: none;" role="status" aria-live="polite"></div>
-        </div>
-
-        <!-- Logbook Panel -->
-        <div id="logbook-panel" class="tab-panel" role="tabpanel" aria-labelledby="tab-logbook" tabindex="0">
-            <div class="form-section">
-                <h2 class="form-title">
-                    <i class="fas fa-book" aria-hidden="true"></i> Observation Logbook
-                    <span class="badge" id="observation-count">0 observations</span>
-                </h2>
-                
-                <div class="btn-group">
-                    <button id="clear-logbook" class="btn btn-danger" aria-label="Clear all entries">
-                        <i class="fas fa-trash-alt" aria-hidden="true"></i> Clear All
-                    </button>
-                    <button id="import-logbook" class="btn btn-outline" aria-label="Import CSV">
-                        <i class="fas fa-file-import" aria-hidden="true"></i> Import CSV
-                    </button>
-                    <button id="download-template" class="btn btn-outline" aria-label="Download CSV template">
-                        <i class="fas fa-download" aria-hidden="true"></i> Download Template
-                    </button>
-                </div>
-                
-                <div class="logbook-entries" id="logbook-entries" role="list" aria-label="Observation logbook entries">
-                    <!-- Log entries will be inserted here -->
-                </div>
-                
-                <div id="empty-logbook" class="empty-state" aria-live="polite">
-                    <i class="fas fa-book-open" aria-hidden="true"></i>
-                    <h3>No observations recorded yet</h3>
-                    <p>Start by making your first observation in the Record tab!</p>
-                </div>
-            </div>
-        </div>
-
-        <!-- Export Panel -->
-        <div id="export-panel" class="tab-panel" role="tabpanel" aria-labelledby="tab-export" tabindex="0">
-
-            <!-- Import Section -->
-            <div class="form-section import-section">
-                <h2 class="form-title">
-                    <i class="fas fa-file-import" aria-hidden="true"></i> Import Observations
-                </h2>
-                <div class="form-group">
-                    <label class="form-label" for="csv-import">
-                        <i class="fas fa-file-csv" aria-hidden="true"></i> Import CSV File
-                    </label>
-                    <input type="file" id="csv-import" accept=".csv" class="form-input" 
-                           aria-label="CSV file to import">
-                    
-                    <label class="form-label" for="json-import" style="margin-top: 1rem;">
-                        <i class="fas fa-file-code" aria-hidden="true"></i> Import JSON File
-                    </label>
-                    <input type="file" id="json-import" accept=".json" class="form-input" 
-                           style="margin-top: 0.5rem;" aria-label="JSON file to import">
-                    
-                    <div class="import-mode">
-                        <div class="import-mode-option">
-                            <label class="form-label tooltip" for="import-mode">
-                                <i class="fas fa-cog" aria-hidden="true"></i> CSV Import Mode
-                            </label>
-                            <select id="import-mode" class="form-select" aria-label="Import mode">
-                                <option value="append">Append to existing data</option>
-                                <option value="replace">Replace existing data</option>
-                                <option value="merge">Merge and update existing</option>
-                            </select>
-                        </div>
-                        <div class="import-mode-option">
-                            <label class="form-label tooltip" for="json-import-mode">
-                                <i class="fas fa-cog" aria-hidden="true"></i> JSON Import Mode
-                            </label>
-                            <select id="json-import-mode" class="form-select" aria-label="JSON import mode">
-                                <option value="append">Append to existing data</option>
-                                <option value="replace">Replace existing data</option>
-                                <option value="merge">Merge and update existing</option>
-                            </select>
-                        </div>
-                    </div>
-                                
-                    <div class="import-note">
-                        <strong><i class="fas fa-info-circle" aria-hidden="true"></i> Required format:</strong> CSV with headers: ID, Timestamp, Observer Name, Scientific Name, Common Name, Location, Latitude, Longitude, Habitat, Observation Type, Characteristics, Equipment, References, Notes, Has Photo.<br>
-                        <strong>OR</strong> JSON array of observation objects with proper structure.<br>
-                        <strong><i class="fas fa-calendar-alt" aria-hidden="true"></i> Date format:</strong> Use ISO format (YYYY-MM-DDTHH:mm:ss) for best results.<br>
-                        <strong><i class="fas fa-shield-alt" aria-hidden="true"></i> Safety note:</strong> Text starting with =, +, -, @ will be prefixed with ' to prevent formula execution.
-                    </div>
-                    
-                    <button id="preview-import" class="btn btn-primary btn-block">
-                        <i class="fas fa-eye" aria-hidden="true"></i> Preview CSV Import
-                    </button>
-                    <button id="preview-json-import" class="btn btn-primary btn-block" style="margin-top: 1rem;">
-                        <i class="fas fa-eye" aria-hidden="true"></i> Preview JSON Import
-                    </button>
-                </div>
-                
-                <!-- CSV Preview & Validation Section -->
-                <div id="csv-preview-section" class="csv-preview-section">
-                    <h3><i class="fas fa-search" aria-hidden="true"></i> CSV Preview & Validation</h3>
-
-                    <div id="csv-import-progress" class="pdf-status" style="display: none;">
-                        <div id="csv-import-status-text">Importing CSV...</div>
-                        <progress id="csv-import-progress-bar" value="0" max="100" aria-label="CSV import progress"></progress>
-                        <div id="csv-import-current-action"></div>
-                    </div>
-                                        
-                    <!-- Validation Statistics -->
-                    <div id="validation-stats" class="validation-stats" style="display: none;">
-                        <div id="stat-valid-rows" class="stat-item stat-valid">
-                            <i class="fas fa-check-circle" aria-hidden="true"></i> <span id="valid-count">0</span> valid
-                        </div>
-                        <div id="stat-invalid-rows" class="stat-item stat-invalid">
-                            <i class="fas fa-times-circle" aria-hidden="true"></i> <span id="invalid-count">0</span> invalid
-                        </div>
-                        <div id="stat-warning-rows" class="stat-item stat-warning">
-                            <i class="fas fa-exclamation-triangle" aria-hidden="true"></i> <span id="warning-count">0</span> warnings
-                        </div>
-                        <div id="stat-skipped-rows" class="stat-item stat-info">
-                            <i class="fas fa-forward" aria-hidden="true"></i> <span id="skipped-count">0</span> skipped
-                        </div>
-                        <div id="stat-metadata-rows" class="stat-item stat-info">
-                            <i class="fas fa-info-circle" aria-hidden="true"></i> <span id="metadata-count">0</span> metadata
-                        </div>
-                    </div>
-                    
-                    <div id="validation-summary" class="validation-summary"></div>
-                    
-                    <!-- Mini Map Preview for Coordinates -->
-                    <div id="mini-map-container" class="mini-map-preview" style="display: none;" aria-label="Map preview of imported coordinates"></div>
-                    
-                    <div id="preview-table-container" style="overflow: auto; max-height: 300px; border-radius: var(--border-radius-sm);">
-                        <table id="csv-preview-table" class="csv-preview-table" role="grid" aria-label="CSV preview table"></table>
-                    </div>
-                    <div id="preview-actions" class="btn-group" style="margin-top: 1.5rem;">
-                        <button id="confirm-import" class="btn btn-primary">
-                            <i class="fas fa-check" aria-hidden="true"></i> Confirm Import
-                        </button>
-                        <button id="cancel-import" class="btn btn-outline">
-                            <i class="fas fa-times" aria-hidden="true"></i> Cancel
-                        </button>
-                    </div>
-                </div>
-                
-                <!-- JSON Preview Section -->
-                <div id="json-preview-section" class="csv-preview-section" style="display: none;">
-                    <h3><i class="fas fa-file-code" aria-hidden="true"></i> JSON Preview & Validation</h3>
-                    
-                    <div id="json-validation-stats" class="validation-stats" style="display: none;">
-                        <div id="json-valid-count" class="stat-item stat-valid">
-                            <i class="fas fa-check-circle" aria-hidden="true"></i> <span id="json-valid-count-val">0</span> valid
-                        </div>
-                        <div id="json-invalid-count" class="stat-item stat-invalid">
-                            <i class="fas fa-times-circle" aria-hidden="true"></i> <span id="json-invalid-count-val">0</span> invalid
-                        </div>
-                        <div id="json-photo-count" class="stat-item stat-info">
-                            <i class="fas fa-camera" aria-hidden="true"></i> <span id="json-photo-count-val">0</span> with photos
-                        </div>
-                    </div>
-                    
-                    <div id="json-validation-summary" class="validation-summary"></div>
-                    
-                    <div id="json-preview-content" class="json-preview-content" 
-                         style="max-height: 200px; overflow: auto; background: #f8f9fa; padding: 1rem; border-radius: var(--border-radius-sm); margin: 1rem 0;"></div>
-                    
-                    <div id="json-preview-actions" class="btn-group" style="margin-top: 1.5rem;">
-                        <button id="confirm-json-import" class="btn btn-primary">
-                            <i class="fas fa-check" aria-hidden="true"></i> Confirm Import
-                        </button>
-                        <button id="cancel-json-import" class="btn btn-outline">
-                            <i class="fas fa-times" aria-hidden="true"></i> Cancel
-                        </button>
-                    </div>
-                </div>
-                
-                <div id="import-status" class="status-message" style="display: none; margin-top: 1.5rem;" role="status" aria-live="polite"></div>
-            </div>
-
-            <!-- Export Section -->
-            <div class="form-section export-options">
-                <h2 class="form-title">
-                    <i class="fas fa-file-export" aria-hidden="true"></i> Export Observations
-                </h2>
-                
-                <div class="batch-selection" id="batch-selection" style="display: none;">
-                    <h3><i class="fas fa-check-square" aria-hidden="true"></i> Select Observations to Export</h3>
-                    <div class="batch-checkboxes" id="batch-checkboxes"></div>
-                    <div class="btn-group">
-                        <button id="select-all-btn" class="btn btn-outline btn-small">
-                            <i class="fas fa-check-double" aria-hidden="true"></i> Select All
-                        </button>
-                        <button id="deselect-all-btn" class="btn btn-outline btn-small">
-                            <i class="fas fa-times" aria-hidden="true"></i> Deselect All
-                        </button>
-                        <button id="apply-batch-selection" class="btn btn-primary btn-small">
-                            <i class="fas fa-check" aria-hidden="true"></i> Apply Selection (<span id="batch-selection-count">0</span>)
-                        </button>
-                    </div>
-                </div>
-                
-                <div class="export-option-group">
-                    <label class="form-label">
-                        <i class="fas fa-file" aria-hidden="true"></i> Export Format
-                    </label>
-                    <div class="export-option">
-                        <input type="radio" id="export-pdf" name="export-format" value="pdf" checked aria-label="Export as PDF">
-                        <label for="export-pdf">
-                            <i class="fas fa-file-pdf" aria-hidden="true"></i> PDF Field Log (with photos)
-                        </label>
-                    </div>
-                    <div class="export-option">
-                        <input type="radio" id="export-csv" name="export-format" value="csv" aria-label="Export as CSV">
-                        <label for="export-csv">
-                            <i class="fas fa-file-csv" aria-hidden="true"></i> CSV Data
-                        </label>
-                    </div>
-                    <div class="export-option">
-                        <input type="radio" id="export-json" name="export-format" value="json" aria-label="Export as JSON">
-                        <label for="export-json">
-                            <i class="fas fa-file-code" aria-hidden="true"></i> JSON (Full data with photos)
-                        </label>
-                    </div>
-                    <div class="export-option">
-                        <input type="checkbox" id="enable-batch-selection" aria-label="Enable batch selection">
-                        <label for="enable-batch-selection">
-                            <i class="fas fa-list-check" aria-hidden="true"></i> Select specific observations
-                        </label>
-                    </div>
-                </div>
-
-                <!-- Export Option Notes -->
-                <div id="export-notes" style="margin-top: 1rem;">
-                    <div id="csv-export-note" class="import-note" style="display: none;">
-                        <strong><i class="fas fa-info-circle" aria-hidden="true"></i> CSV Export:</strong> Exports observation data in CSV format, suitable for spreadsheets and databases.
-                    </div>
-                    <div id="json-export-note" class="import-note" style="display: none;">
-                        <strong><i class="fas fa-info-circle" aria-hidden="true"></i> JSON Export:</strong> Exports complete observation data including photos in JSON format.
-                    </div>
-                    <div id="pdf-export-note" class="import-note" style="display: block;">
-                        <strong><i class="fas fa-info-circle" aria-hidden="true"></i> PDF Export:</strong> Creates a formatted PDF report with photos, suitable for printing and sharing.
-                    </div>
-                </div>
-
-                <div class="export-option-group">
-                    <label class="form-label">
-                        <i class="fas fa-calendar-alt" aria-hidden="true"></i> Date Range (Optional)
-                    </label>
-                    <div class="date-range">
-                        <div class="date-input">
-                            <label class="form-label" style="font-size: 0.9rem;">From</label>
-                            <input type="date" id="date-from" class="form-input" aria-label="Export from date">
-                        </div>
-                        <div class="date-input">
-                            <label class="form-label" style="font-size: 0.9rem;">To</label>
-                            <input type="date" id="date-to" class="form-input" aria-label="Export to date">
-                        </div>
-                    </div>
-                </div>
-
-                <button id="generate-export" class="btn btn-secondary btn-block" aria-label="Generate export">
-                    <i class="fas fa-file-export" aria-hidden="true"></i> Generate Export
-                </button>
-            </div>
-
-            <div id="export-status" class="status-message" style="display: none;" role="status" aria-live="polite"></div>
-            <div id="pdf-progress" class="pdf-status" style="display: none;">
-                <div id="pdf-status-text">Preparing PDF...</div>
-                <progress id="pdf-progress-bar" value="0" max="100" aria-label="PDF generation progress"></progress>
-                <div id="pdf-current-action"></div>
-            </div>
-            <div id="export-download" style="display: none; text-align: center; margin-top: 2rem;">
-                <a id="download-link" class="btn btn-primary" download aria-label="Download export file">
-                    <i class="fas fa-download" aria-hidden="true"></i> Download Export
-                </a>
-            </div>
-        </div>
-    </div>
-
-    <!-- Floating Action Button for Mobile -->
-    <div class="fab" id="fab-add" title="Add new observation" aria-label="Add new observation">
-        <i class="fas fa-plus" aria-hidden="true"></i>
-    </div>
-
-<script>
 // Main application state
 const EcoLens = {
     observations: [],
@@ -4036,256 +1897,267 @@ const EcoLens = {
         return filtered;
     },
 
-    // Setup all event listeners - FIXED: Photo removal
-    setupEventListeners() {
-        // Tab navigation
-        document.querySelectorAll('.tab-btn').forEach(btn => {
-            btn.addEventListener('click', (e) => {
-                e.preventDefault();
-                const tab = btn.dataset.tab;
-                this.switchTab(tab);
-            });
+     Photo removal AND import functionality
+setupEventListeners() {
+    // Tab navigation
+    document.querySelectorAll('.tab-btn').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+            e.preventDefault();
+            const tab = btn.dataset.tab;
+            this.switchTab(tab);
         });
+    });
 
-        // Set current date/time
-        const setNowBtn = document.getElementById('set-now');
-        if (setNowBtn) {
-            setNowBtn.addEventListener('click', () => {
-                this.setCurrentDateTime();
-            });
-        }
+    // Set current date/time
+    const setNowBtn = document.getElementById('set-now');
+    if (setNowBtn) {
+        setNowBtn.addEventListener('click', () => {
+            this.setCurrentDateTime();
+        });
+    }
 
-        // Record observation
-        const recordBtn = document.getElementById('record-btn');
-        if (recordBtn) {
-            recordBtn.addEventListener('click', () => {
-                this.handleRecordObservation();
-            });
-        }
+    // Record observation
+    const recordBtn = document.getElementById('record-btn');
+    if (recordBtn) {
+        recordBtn.addEventListener('click', () => {
+            this.handleRecordObservation();
+        });
+    }
 
-        // Map controls
-        const toggleMapBtn = document.getElementById('toggle-map');
-        if (toggleMapBtn) {
-            toggleMapBtn.addEventListener('click', () => {
-                this.toggleMap();
-            });
-        }
+    // Map controls
+    const toggleMapBtn = document.getElementById('toggle-map');
+    if (toggleMapBtn) {
+        toggleMapBtn.addEventListener('click', () => {
+            this.toggleMap();
+        });
+    }
 
-        const useMyLocationBtn = document.getElementById('use-my-location');
-        if (useMyLocationBtn) {
-            useMyLocationBtn.addEventListener('click', () => {
-                this.getUserLocation();
-            });
-        }
+    const useMyLocationBtn = document.getElementById('use-my-location');
+    if (useMyLocationBtn) {
+        useMyLocationBtn.addEventListener('click', () => {
+            this.getUserLocation();
+        });
+    }
 
-        // Photo handling - SIMPLIFIED FIX
-        const photoRemoveBtn = document.getElementById('photo-remove');
-        if (photoRemoveBtn) {
-            // Add click event to the remove button
-            photoRemoveBtn.addEventListener('click', (e) => {
-                e.preventDefault();
-                e.stopPropagation();
-                this.removePhoto();
-            });
-        }
+    // Photo handling - SIMPLIFIED FIX
+    const photoRemoveBtn = document.getElementById('photo-remove');
+    if (photoRemoveBtn) {
+        // Add click event to the remove button
+        photoRemoveBtn.addEventListener('click', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            this.removePhoto();
+        });
+    }
 
-        // Capture button handler
-        const capturePhotoBtn = document.getElementById('capture-photo');
-        if (capturePhotoBtn) {
-            capturePhotoBtn.addEventListener('click', () => {
-                document.getElementById('photo-upload').click();
-            });
-        }
+    // Capture button handler
+    const capturePhotoBtn = document.getElementById('capture-photo');
+    if (capturePhotoBtn) {
+        capturePhotoBtn.addEventListener('click', () => {
+            document.getElementById('photo-upload').click();
+        });
+    }
 
-        // File upload handler
-        const photoUpload = document.getElementById('photo-upload');
-        if (photoUpload) {
-            photoUpload.addEventListener('change', (e) => {
-                this.handlePhotoUpload(e);
-            });
-        }
+    // File upload handler
+    const photoUpload = document.getElementById('photo-upload');
+    if (photoUpload) {
+        photoUpload.addEventListener('change', (e) => {
+            this.handlePhotoUpload(e);
+        });
+    }
 
-        // Equipment checkboxes
-        document.querySelectorAll('input[name="equipment"]').forEach(checkbox => {
-            checkbox.addEventListener('change', (e) => {
-                if (e.target.value === 'other-equipment') {
-                    const otherEquipment = document.getElementById('other-equipment');
-                    if (otherEquipment) {
-                        otherEquipment.style.display = e.target.checked ? 'block' : 'none';
-                        if (e.target.checked) {
-                            otherEquipment.focus();
-                        }
+    // Equipment checkboxes
+    document.querySelectorAll('input[name="equipment"]').forEach(checkbox => {
+        checkbox.addEventListener('change', (e) => {
+            if (e.target.value === 'other-equipment') {
+                const otherEquipment = document.getElementById('other-equipment');
+                if (otherEquipment) {
+                    otherEquipment.style.display = e.target.checked ? 'block' : 'none';
+                    if (e.target.checked) {
+                        otherEquipment.focus();
                     }
                 }
-            });
+            }
         });
+    });
 
-        // Export handling
-        const generateExportBtn = document.getElementById('generate-export');
-        if (generateExportBtn) {
-            generateExportBtn.addEventListener('click', () => {
-                this.handleExport();
-            });
-        }
+    // Export handling
+    const generateExportBtn = document.getElementById('generate-export');
+    if (generateExportBtn) {
+        generateExportBtn.addEventListener('click', () => {
+            this.handleExport();
+        });
+    }
 
-        // Export format radio buttons
-        const exportRadios = document.querySelectorAll('input[name="export-format"]');
-        exportRadios.forEach(radio => {
-            radio.addEventListener('change', (e) => {
-                if (e.target.checked) {
-                    this.updateExportOptions(e.target.value);
+    // Export format radio buttons
+    const exportRadios = document.querySelectorAll('input[name="export-format"]');
+    exportRadios.forEach(radio => {
+        radio.addEventListener('change', (e) => {
+            if (e.target.checked) {
+                this.updateExportOptions(e.target.value);
+            }
+        });
+    });
+
+    // CSV import handlers - FIXED
+    const previewImportBtn = document.getElementById('preview-import');
+    if (previewImportBtn) {
+        previewImportBtn.addEventListener('click', () => {
+            this.handlePreviewCSVImport();
+        });
+    }
+
+    const confirmCSVBtn = document.getElementById('confirm-import');
+    if (confirmCSVBtn) {
+        confirmCSVBtn.addEventListener('click', () => {
+            this.handleConfirmCSVImport();
+        });
+    }
+
+    const cancelCSVBtn = document.getElementById('cancel-import');
+    if (cancelCSVBtn) {
+        cancelCSVBtn.addEventListener('click', () => {
+            this.hideCSVPreview();
+        });
+    }
+
+    // JSON import handlers - FIXED
+    const previewJSONBtn = document.getElementById('preview-json-import');
+    if (previewJSONBtn) {
+        previewJSONBtn.addEventListener('click', () => {
+            this.handlePreviewJSONImport();
+        });
+    }
+
+    const confirmJSONBtn = document.getElementById('confirm-json-import');
+    if (confirmJSONBtn) {
+        confirmJSONBtn.addEventListener('click', () => {
+            this.handleConfirmJSONImport();
+        });
+    }
+
+    const cancelJSONBtn = document.getElementById('cancel-json-import');
+    if (cancelJSONBtn) {
+        cancelJSONBtn.addEventListener('click', () => {
+            this.hideJSONPreview();
+        });
+    }
+
+    // Logbook actions
+    const clearLogbookBtn = document.getElementById('clear-logbook');
+    if (clearLogbookBtn) {
+        clearLogbookBtn.addEventListener('click', () => {
+            this.clearObservations();
+        });
+    }
+
+    const downloadTemplateBtn = document.getElementById('download-template');
+    if (downloadTemplateBtn) {
+        downloadTemplateBtn.addEventListener('click', () => {
+            this.downloadCSVTemplate();
+        });
+    }
+
+    const importLogbookBtn = document.getElementById('import-logbook');
+    if (importLogbookBtn) {
+        importLogbookBtn.addEventListener('click', () => {
+            this.switchTab('export');
+            setTimeout(() => {
+                // Scroll to import section
+                const importSection = document.querySelector('.import-section');
+                if (importSection) {
+                    importSection.scrollIntoView({ behavior: 'smooth' });
                 }
-            });
+            }, 100);
         });
+    }
 
-        // CSV import handlers
-        const previewImportBtn = document.getElementById('preview-import');
-        if (previewImportBtn) {
-            previewImportBtn.addEventListener('click', () => {
-                this.handlePreviewCSVImport();
-            });
-        }
+    // Batch selection
+    const enableBatchSelection = document.getElementById('enable-batch-selection');
+    if (enableBatchSelection) {
+        enableBatchSelection.addEventListener('change', (e) => {
+            this.toggleBatchSelection(e.target.checked);
+        });
+    }
 
-        const confirmCSVBtn = document.getElementById('confirm-import');
-        if (confirmCSVBtn) {
-            confirmCSVBtn.addEventListener('click', () => {
-                this.handleConfirmCSVImport();
-            });
-        }
+    const selectAllBtn = document.getElementById('select-all-btn');
+    if (selectAllBtn) {
+        selectAllBtn.addEventListener('click', () => {
+            this.selectAllObservations();
+        });
+    }
 
-        const cancelCSVBtn = document.getElementById('cancel-import');
-        if (cancelCSVBtn) {
-            cancelCSVBtn.addEventListener('click', () => {
+    const deselectAllBtn = document.getElementById('deselect-all-btn');
+    if (deselectAllBtn) {
+        deselectAllBtn.addEventListener('click', () => {
+            this.deselectAllObservations();
+        });
+    }
+
+    const applyBatchBtn = document.getElementById('apply-batch-selection');
+    if (applyBatchBtn) {
+        applyBatchBtn.addEventListener('click', () => {
+            this.applyBatchSelection();
+        });
+    }
+
+    // File input change handlers - ADD THESE
+    const csvImport = document.getElementById('csv-import');
+    if (csvImport) {
+        csvImport.addEventListener('change', (e) => {
+            if (e.target.files.length > 0) {
+                const file = e.target.files[0];
+                const MAX_FILE_SIZE = 10 * 1024 * 1024;
+                if (file.size > MAX_FILE_SIZE) {
+                    this.showStatus(`File too large. Maximum size is ${MAX_FILE_SIZE / 1024 / 1024}MB`, 'error', 'export');
+                    e.target.value = '';
+                    return;
+                }
+                // Don't auto-preview, let user click preview button
                 this.hideCSVPreview();
-            });
-        }
+                this.csvPreviewData = null;
+                
+                // Show file selected message
+                this.showStatus(`CSV file selected: ${file.name} (${this.formatBytes(file.size)})`, 'info', 'export');
+            }
+        });
+    }
 
-        // JSON import handlers
-        const previewJSONBtn = document.getElementById('preview-json-import');
-        if (previewJSONBtn) {
-            previewJSONBtn.addEventListener('click', () => {
-                this.handlePreviewJSONImport();
-            });
-        }
-
-        const confirmJSONBtn = document.getElementById('confirm-json-import');
-        if (confirmJSONBtn) {
-            confirmJSONBtn.addEventListener('click', () => {
-                this.handleConfirmJSONImport();
-            });
-        }
-
-        const cancelJSONBtn = document.getElementById('cancel-json-import');
-        if (cancelJSONBtn) {
-            cancelJSONBtn.addEventListener('click', () => {
+    const jsonImport = document.getElementById('json-import');
+    if (jsonImport) {
+        jsonImport.addEventListener('change', (e) => {
+            if (e.target.files.length > 0) {
+                const file = e.target.files[0];
+                const MAX_FILE_SIZE = 10 * 1024 * 1024;
+                if (file.size > MAX_FILE_SIZE) {
+                    this.showStatus(`File too large. Maximum size is ${MAX_FILE_SIZE / 1024 / 1024}MB`, 'error', 'export');
+                    e.target.value = '';
+                    return;
+                }
+                // Don't auto-preview, let user click preview button
                 this.hideJSONPreview();
-            });
-        }
+                this.jsonPreviewData = null;
+                
+                // Show file selected message
+                this.showStatus(`JSON file selected: ${file.name} (${this.formatBytes(file.size)})`, 'info', 'export');
+            }
+        });
+    }
 
-        // Logbook actions
-        const clearLogbookBtn = document.getElementById('clear-logbook');
-        if (clearLogbookBtn) {
-            clearLogbookBtn.addEventListener('click', () => {
-                this.clearObservations();
+    // Form input tracking
+    const recordPanel = document.getElementById('record-panel');
+    if (recordPanel) {
+        recordPanel.querySelectorAll('input, textarea, select').forEach(input => {
+            input.addEventListener('input', () => {
+                const recordStatus = document.getElementById('record-status');
+                if (recordStatus) recordStatus.style.display = 'none';
             });
-        }
+        });
+    }
 
-        const downloadTemplateBtn = document.getElementById('download-template');
-        if (downloadTemplateBtn) {
-            downloadTemplateBtn.addEventListener('click', () => {
-                this.downloadCSVTemplate();
-            });
-        }
-
-        const importLogbookBtn = document.getElementById('import-logbook');
-        if (importLogbookBtn) {
-            importLogbookBtn.addEventListener('click', () => {
-                this.switchTab('export');
-                setTimeout(() => {
-                    const csvImportBtn = document.getElementById('csv-import');
-                    if (csvImportBtn) csvImportBtn.click();
-                }, 100);
-            });
-        }
-
-        // Batch selection
-        const enableBatchSelection = document.getElementById('enable-batch-selection');
-        if (enableBatchSelection) {
-            enableBatchSelection.addEventListener('change', (e) => {
-                this.toggleBatchSelection(e.target.checked);
-            });
-        }
-
-        const selectAllBtn = document.getElementById('select-all-btn');
-        if (selectAllBtn) {
-            selectAllBtn.addEventListener('click', () => {
-                this.selectAllObservations();
-            });
-        }
-
-        const deselectAllBtn = document.getElementById('deselect-all-btn');
-        if (deselectAllBtn) {
-            deselectAllBtn.addEventListener('click', () => {
-                this.deselectAllObservations();
-            });
-        }
-
-        const applyBatchBtn = document.getElementById('apply-batch-selection');
-        if (applyBatchBtn) {
-            applyBatchBtn.addEventListener('click', () => {
-                this.applyBatchSelection();
-            });
-        }
-
-        // File input change handlers
-        const csvImport = document.getElementById('csv-import');
-        if (csvImport) {
-            csvImport.addEventListener('change', (e) => {
-                if (e.target.files.length > 0) {
-                    const file = e.target.files[0];
-                    const MAX_FILE_SIZE = 10 * 1024 * 1024;
-                    if (file.size > MAX_FILE_SIZE) {
-                        this.showStatus(`File too large. Maximum size is ${MAX_FILE_SIZE / 1024 / 1024}MB`, 'error', 'export');
-                        e.target.value = '';
-                        return;
-                    }
-                    this.hideCSVPreview();
-                    this.csvPreviewData = null;
-                }
-            });
-        }
-
-        const jsonImport = document.getElementById('json-import');
-        if (jsonImport) {
-            jsonImport.addEventListener('change', (e) => {
-                if (e.target.files.length > 0) {
-                    const file = e.target.files[0];
-                    const MAX_FILE_SIZE = 10 * 1024 * 1024;
-                    if (file.size > MAX_FILE_SIZE) {
-                        this.showStatus(`File too large. Maximum size is ${MAX_FILE_SIZE / 1024 / 1024}MB`, 'error', 'export');
-                        e.target.value = '';
-                        return;
-                    }
-                    this.hideJSONPreview();
-                    this.jsonPreviewData = null;
-                }
-            });
-        }
-
-        // Form input tracking
-        const recordPanel = document.getElementById('record-panel');
-        if (recordPanel) {
-            recordPanel.querySelectorAll('input, textarea, select').forEach(input => {
-                input.addEventListener('input', () => {
-                    const recordStatus = document.getElementById('record-status');
-                    if (recordStatus) recordStatus.style.display = 'none';
-                });
-            });
-        }
-
-        // Touch event handling for mobile
-        document.addEventListener('touchstart', function() {}, { passive: true });
-    },
+    // Touch event handling for mobile
+    document.addEventListener('touchstart', function() {}, { passive: true });
+},
 
     // Handle CSV preview - FIXED: Consolidated function
     handlePreviewCSVImport() {
@@ -6727,21 +4599,3 @@ window.addEventListener('beforeunload', () => {
         });
     }
 });
-</script>
-    <!-- Photo Processing Status - ADD THIS BEFORE </body> -->
-    <div id="photo-processing-status" style="
-        position: fixed;
-        bottom: 20px;
-        right: 20px;
-        background: rgba(0, 0, 0, 0.8);
-        color: white;
-        padding: 10px 20px;
-        border-radius: 5px;
-        z-index: 1000;
-        display: none;
-        font-size: 14px;
-    ">
-        <span id="compression-status"></span>
-    </div>
-</body>
-</html>
