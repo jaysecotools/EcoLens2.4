@@ -1,10 +1,14 @@
-        const recordBtn = document.getElementById('record-btn');
-        if (recordBtn) {
-            recordBtn.innerHTML = '<i class="fas fa-save"></i> Update Observation';
-            recordBtn.dataset.editingId = id;
-            recordBtn.onclick = () => this.handleUpdateObservation(id);
-        }
-        
+this.switchTab('record');
+
+// Add a small delay to ensure tab switch completes
+setTimeout(() => {
+    if (observerNameInput) observerNameInput.focus();
+    
+    // Verify we're on the right tab
+    const recordPanel = document.getElementById('record-panel');
+    if (recordPanel && !recordPanel.classList.contains('active')) {
+        console.error('Record panel is not active!');
+        // Force activate it
         this.switchTab('record');
-        if (observerNameInput) observerNameInput.focus();
-    },
+    }
+}, 50);
