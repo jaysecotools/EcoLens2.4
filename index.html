@@ -1,4 +1,7 @@
-<!-- Working Version 2.4. Data Import Issues Now Fixed. Observation Edit Tab Switching now fixed. -->
+
+<!-- Working Version 2.4.1 Footer added. Clear form added -->
+
+
 
 <!DOCTYPE html>
 <html lang="en">
@@ -1859,10 +1862,14 @@
                 </div>
 
                 <!-- Submit Button -->
-                <button id="record-btn" class="btn btn-primary btn-block" aria-label="Record observation">
-                    <i class="fas fa-save" aria-hidden="true"></i> Record Observation
-                </button>
-            </div>
+<div class="btn-group" style="margin-top: 2rem;">
+    <button id="record-btn" class="btn btn-primary" aria-label="Record observation">
+        <i class="fas fa-save" aria-hidden="true"></i> Record Observation
+    </button>
+    <button id="clear-form-btn" class="btn btn-outline" aria-label="Clear form">
+        <i class="fas fa-eraser" aria-hidden="true"></i> Clear Form
+    </button>
+</div>
 
             <div id="record-status" class="status-message" style="display: none;" role="status" aria-live="polite"></div>
         </div>
@@ -4231,6 +4238,17 @@ const EcoLens = {
                 }
             });
         });
+
+// Clear form button
+const clearFormBtn = document.getElementById('clear-form-btn');
+if (clearFormBtn) {
+    clearFormBtn.addEventListener('click', () => {
+        if (confirm('Are you sure you want to clear the form? All entered data will be lost.')) {
+            this.resetForm();
+            this.showStatus('Form cleared', 'info');
+        }
+    });
+}
 
         // Export handling
         const generateExportBtn = document.getElementById('generate-export');
